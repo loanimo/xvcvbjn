@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="bn" id="htmlRoot" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>গ্লোবাল লটারি প্রো — অফিশিয়াল প্রাইজ পোর্টাল</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&family=Great+Vibes&display=swap');
+        body { font-family: 'Hind Siliguri', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .signature-font { font-family: 'Great Vibes', cursive; }
+        .glow-gold { box-shadow: 0 0 25px rgba(245, 158, 11, 0.3); }
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 28s linear infinite; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+    <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+    <!-- Bottom Left Live Activity Ticker -->
+    <div id="liveWithdrawalTicker" class="fixed bottom-4 left-4 z-40 max-w-xs w-full pointer-events-none">
+        <div class="bg-slate-900/95 border border-emerald-500/40 rounded-2xl p-3 shadow-2xl flex items-center space-x-3 backdrop-blur-md">
+            <div id="tickerIconBox" class="bg-emerald-500 text-slate-950 p-2 rounded-xl"><i class="fa-solid fa-money-bill-transfer"></i></div>
+            <div class="text-xs">
+                <p id="tickerUserName" class="font-bold text-white">রহিম ভাই (ঢাকা)</p>
+                <p id="tickerWdText" class="text-emerald-400 font-bold">বিকাশে ৳৫,০০০ উইথড্র সফল করেছেন!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Right Live Support Chat Widget -->
+    <div class="fixed bottom-4 right-4 z-40">
+        <button onclick="toggleChatBox()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl font-bold transition transform hover:scale-110 relative">
+            <i class="fa-solid fa-headset"></i>
+            <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold animate-bounce">১</span>
+        </button>
+
+        <div id="chatBoxContainer" class="hidden absolute bottom-16 right-0 w-80 sm:w-96 bg-slate-900 border border-amber-500/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="bg-slate-950 p-3 border-b border-slate-800 flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                    <h4 class="text-xs font-bold text-amber-400">লাইভ অ্যাডমিন চ্যাট সাপোর্ট</h4>
+                </div>
+                <button onclick="toggleChatBox()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="chatMessagesArea" class="p-3 h-64 overflow-y-auto space-y-2 text-xs bg-slate-950/60"></div>
+            <div class="p-2 bg-slate-950 border-t border-slate-800 flex gap-2">
+                <input type="text" id="clientChatInput" placeholder="অ্যাডমিনকে মেসেজ বা কোডের আবেদন লিখুন..." class="flex-grow bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                <button onclick="sendClientChatMessage()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="fixed bottom-20 left-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Admin Notice Ticker -->
+    <div class="bg-amber-500/10 border-b border-amber-500/20 py-1.5 overflow-hidden">
+        <div class="animate-marquee text-xs text-amber-300 font-medium">
+            <span id="adminNoticeTicker">📢 জরুরি বিজ্ঞপ্তি: অ্যাডমিন কোড বা পাসওয়ার্ড সমস্যার জন্য সরাসরি লাইভ চ্যাটে আবেদন করুন! মেগা লটারি ড্র চলছে।</span>
+        </div>
+    </div>
+
+    <!-- Instant Client Notification Bar -->
+    <div id="clientNotificationBar" class="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white py-2 px-4 text-xs font-bold shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-bell animate-bounce text-amber-300 text-sm"></i>
+                <span id="clientNotificationText">🎉 আপনার অ্যাকাউন্ট সক্রিয় আছে! প্যাকেজ এপ্রুভ হলেই সরাসরি গেম খেলতে পারবেন।</span>
+            </div>
+            <div id="notificationBarActionArea">
+                <button onclick="openUserDashboard('packages')" class="bg-slate-950 text-amber-400 hover:bg-slate-900 px-3 py-1 rounded-full text-[11px] transition shadow">অ্যাক্টিভ প্যাকেজ: <strong id="activePkgCountBadge">০</strong></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+            <div onclick="handleLogoTripleClick()" class="flex items-center space-x-2.5 cursor-pointer select-none" title="গ্লোবাল লটারি প্রো">
+                <div class="bg-amber-500 text-slate-950 p-2 rounded-xl shadow-lg"><i class="fa-solid fa-trophy text-lg"></i></div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-amber-400">গ্লোবাল লটারি প্রো</h1>
+                    <p class="text-[11px] text-slate-400">স্বচ্ছ ও ভেরিফায়েড প্রাইজ ড্র</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <select id="currencySelector" onchange="changeCurrency()" class="bg-slate-800 text-amber-300 border border-amber-500/30 rounded-full px-3 py-1.5 text-xs font-bold focus:outline-none">
+                    <option value="BDT">🇧🇩 BDT (৳)</option>
+                    <option value="USD">🇺🇸 USD ($)</option>
+                    <option value="EUR">🇪🇺 EUR (€)</option>
+                    <option value="GBP">🇬🇧 GBP (£)</option>
+                    <option value="INR">🇮🇳 INR (₹)</option>
+                    <option value="SAR">🇸🇦 SAR (﷼)</option>
+                    <option value="AED">🇦🇪 AED (د.إ)</option>
+                </select>
+
+                <button onclick="toggleTheme()" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-2 rounded-full text-xs border border-slate-700"><i class="fa-solid fa-circle-half-stroke"></i></button>
+
+                <button onclick="openSignInModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-full text-xs font-bold border border-slate-700">সাইন ইন</button>
+                <button onclick="openSignUpModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-full text-xs font-bold shadow">সাইন আপ</button>
+
+                <div onclick="openUserDashboard('deposit')" class="bg-slate-800 border border-slate-700 hover:border-amber-500/50 rounded-full px-3 py-1.5 flex items-center space-x-2 text-xs cursor-pointer transition">
+                    <i class="fa-solid fa-wallet text-amber-400"></i>
+                    <span id="userBalance" class="font-bold text-emerald-400">৳১৫,৫০০</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- User Profile Quick Bar -->
+    <div class="bg-slate-900/60 border-b border-slate-800 py-2 px-4">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center text-xs gap-2">
+            <div class="flex items-center space-x-2">
+                <img id="barUserImg" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" class="w-7 h-7 rounded-full object-cover border border-amber-400">
+                <span>স্বাগতম, <strong id="barUserName" class="text-white">মেহেদী হাসান</strong></span>
+                <span class="text-slate-500 hidden sm:inline">| রেফার কোড: <strong id="barReferCode" class="text-amber-400 font-mono">REF-1001</strong></span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="openUserDashboard('packages')" class="bg-purple-600/20 text-purple-400 border border-purple-500/40 px-3 py-1 rounded-full font-bold hover:bg-purple-600/30"><i class="fa-solid fa-box mr-1"></i> অ্যাক্টিভ প্যাকেজ</button>
+                <button onclick="openUserDashboard('deposit')" class="bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-full font-bold hover:bg-emerald-600/30">+ ডিপোজিট</button>
+                <button onclick="openUserDashboard('withdraw')" class="bg-amber-500/20 text-amber-400 border border-amber-500/40 px-3 py-1 rounded-full font-bold hover:bg-amber-500/30">উইথড্র</button>
+                <button onclick="openUserDashboard('referral')" class="bg-blue-600/20 text-blue-400 border border-blue-500/40 px-3 py-1 rounded-full font-bold hover:bg-blue-600/30">রেফার ও বোনাস</button>
+                <button onclick="openUserDashboard('history')" class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full font-bold hover:bg-slate-700">লেনদেন</button>
+                <button onclick="openUserDashboard('certificates')" class="bg-pink-600/20 text-pink-400 border border-pink-500/40 px-3 py-1 rounded-full font-bold hover:bg-pink-600/30">সার্টিফিকেট</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main id="mainContainer" class="max-w-7xl mx-auto px-4 py-8 space-y-12 flex-grow">
+
+        <!-- HERO SECTION -->
+        <section class="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 border border-amber-500/30 rounded-3xl p-6 md:p-10 text-center space-y-6 glow-gold">
+            <div class="inline-flex items-center space-x-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold px-4 py-1.5 rounded-full">
+                <i class="fa-solid fa-bolt"></i>
+                <span>মেগা লটারি ড্র #<span id="megaDrawNumber">৪২৯</span> চলছে</span>
+            </div>
+
+            <h2 class="text-3xl md:text-5xl font-extrabold text-white leading-tight">
+                আপনার ভাগ্য পরিবর্তন করুন <span class="text-amber-400">১ কোটি টাকা</span> পর্যন্ত পুরস্কারে!
+            </h2>
+
+            <div class="flex justify-center space-x-3 pt-1">
+                <div class="bg-slate-950 border border-amber-500/40 px-4 py-2 rounded-xl text-center">
+                    <span id="timerHours" class="text-xl font-black text-amber-400 block">01</span>
+                    <span class="text-[10px] text-slate-400 uppercase">ঘণ্টা</span>
+                </div>
+                <div class="bg-slate-950 border border-amber-500/40 px-4 py-2 rounded-xl text-center">
+                    <span id="timerMinutes" class="text-xl font-black text-amber-400 block">15</span>
+                    <span class="text-[10px] text-slate-400 uppercase">মিনিট</span>
+                </div>
+                <div class="bg-slate-950 border border-amber-500/40 px-4 py-2 rounded-xl text-center">
+                    <span id="timerSeconds" class="text-xl font-black text-emerald-400 block">45</span>
+                    <span class="text-[10px] text-slate-400 uppercase">সেকেন্ড</span>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-3 pt-2">
+                <button onclick="scrollToSection('packagesGrid')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-3 rounded-2xl text-sm shadow-xl transition">প্যাকেজ দেখুন</button>
+                <button onclick="openSpinModal()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-2xl text-sm shadow-xl transition">ডেইলি স্পিন হুইল</button>
+                <button onclick="openDailyStreakModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3 rounded-2xl text-sm shadow-xl transition">ডেইলি স্ট্রিক বোনাস</button>
+            </div>
+        </section>
+
+        <!-- LIVE USER STATS -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center space-x-4 shadow">
+                <div class="bg-blue-500/20 text-blue-400 p-3 rounded-xl text-xl"><i class="fa-solid fa-users"></i></div>
+                <div>
+                    <span class="text-xs text-slate-400 block">মোট নিবন্ধিত ইউজার</span>
+                    <strong id="statTotalUsers" class="text-xl font-black text-white">২৮,৪৫০+</strong>
+                </div>
+            </div>
+            <div class="bg-slate-900 border border-emerald-500/30 rounded-2xl p-4 flex items-center space-x-4 shadow">
+                <div class="bg-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xl"><i class="fa-solid fa-signal"></i></div>
+                <div>
+                    <span class="text-xs text-slate-400 block">বর্তমানে অনলাইনে সক্রিয়</span>
+                    <strong id="statOnlineUsers" class="text-xl font-black text-emerald-400">১,৪২০</strong>
+                </div>
+            </div>
+            <div class="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 flex items-center space-x-4 shadow">
+                <div class="bg-amber-500/20 text-amber-400 p-3 rounded-xl text-xl"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                <div>
+                    <span class="text-xs text-slate-400 block">মোট পুরস্কার বিতরণ</span>
+                    <strong class="text-xl font-black text-amber-400">৳৪,৮৫,০০,০০০+</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- CODE & WINNER VERIFIER -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-3 shadow-lg">
+                <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-shield-check mr-2"></i> অ্যাডমিন কোড যাচাই করুন</h3>
+                <div class="flex gap-2">
+                    <input type="text" id="clientVerifyInput" placeholder="কোড লিখুন (যেমন: STR-1234)" class="flex-grow bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xs text-amber-300 font-mono uppercase">
+                    <button onclick="verifyClientCode()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">যাচাই</button>
+                </div>
+                <div id="verifyResultBox" class="text-xs text-center hidden pt-2 font-bold"></div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-3 shadow-lg">
+                <h3 class="text-sm font-bold text-purple-400"><i class="fa-solid fa-award mr-2"></i> লটারি বিজয়ী ও সার্টিফিকেট যাচাই</h3>
+                <div class="flex gap-2">
+                    <input type="text" id="winnerCheckInput" placeholder="ফোন নম্বর বা উইনিং আইডি লিখুন..." class="flex-grow bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xs text-purple-300">
+                    <button onclick="verifyWinnerStatus()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">যাচাই</button>
+                </div>
+                <div id="winnerVerifyResultBox" class="text-xs text-center hidden pt-2 font-bold"></div>
+            </div>
+        </section>
+
+        <!-- PACKAGES SECTION (FROM ৳১২৯৯ TO ৳৫৯৯৯) -->
+        <section id="packagesGrid" class="space-y-6">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-amber-400 flex items-center"><i class="fa-solid fa-box-open mr-2"></i> লটারি ও ইনভেস্টমেন্ট প্যাকেজসমূহ (৳১২৯৯ - ৳৫৯৯৯)</h3>
+                <span class="text-xs text-slate-400">নির্বাচিত দেশ অনুযায়ী মূল্য স্বয়ংক্রিয়ভাবে পরিবর্তিত হবে</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Starter Pack -->
+                <div class="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl transition">
+                    <div class="space-y-4">
+                        <h4 class="text-lg font-bold text-amber-400">স্টার্টার প্যাক (প্যাকেজ ১)</h4>
+                        <div class="text-3xl font-black text-emerald-400"><span class="pkg-price" data-base="1299">৳১,২৯৯</span> <span class="text-xs text-slate-400 font-normal">/ মূল্য</span></div>
+                        <ul class="text-xs space-y-2 text-slate-300 border-y border-slate-800 py-4">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ১০টি স্ক্র্যাচ কার্ড</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> পুরস্কার ফান্ড: <strong class="pkg-fund" data-base="1226000">৳১২,২৬,০০০</strong></li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ৩ জন প্রফেসরের সার্টিফিকেট</li>
+                        </ul>
+                    </div>
+                    <button onclick="openPurchaseModal('স্টার্টার প্যাক', 1299, 10, 'starter')" class="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-3 rounded-2xl transition">কোড দিয়ে কিনুন</button>
+                </div>
+
+                <!-- Bronze Pack -->
+                <div class="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl transition">
+                    <div class="space-y-4">
+                        <h4 class="text-lg font-bold text-amber-400">ব্রোঞ্জ প্যাক (প্যাকেজ ২)</h4>
+                        <div class="text-3xl font-black text-emerald-400"><span class="pkg-price" data-base="2499">৳২,৪৯৯</span> <span class="text-xs text-slate-400 font-normal">/ মূল্য</span></div>
+                        <ul class="text-xs space-y-2 text-slate-300 border-y border-slate-800 py-4">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ১৮টি স্ক্র্যাচ কার্ড</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> পুরস্কার ফান্ড: <strong class="pkg-fund" data-base="2500000">৳২৫,০০,০০০</strong></li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ৩ জন প্রফেসরের সার্টিফিকেট</li>
+                        </ul>
+                    </div>
+                    <button onclick="openPurchaseModal('ব্রোঞ্জ প্যাক', 2499, 18, 'bronze')" class="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-3 rounded-2xl transition">কোড দিয়ে কিনুন</button>
+                </div>
+
+                <!-- Silver Pack -->
+                <div class="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl transition">
+                    <div class="space-y-4">
+                        <h4 class="text-lg font-bold text-amber-400">সিলভার প্যাক (প্যাকেজ ৩)</h4>
+                        <div class="text-3xl font-black text-emerald-400"><span class="pkg-price" data-base="4999">৳৪,৯৯৯</span> <span class="text-xs text-slate-400 font-normal">/ মূল্য</span></div>
+                        <ul class="text-xs space-y-2 text-slate-300 border-y border-slate-800 py-4">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ২৫টি স্ক্র্যাচ কার্ড</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> পুরস্কার ফান্ড: <strong class="pkg-fund" data-base="5000000">৳৫০,০০,০০০</strong></li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ৩ জন প্রফেসরের সার্টিফিকেট</li>
+                        </ul>
+                    </div>
+                    <button onclick="openPurchaseModal('সিলভার প্যাক', 4999, 25, 'silver')" class="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-3 rounded-2xl transition">কোড দিয়ে কিনুন</button>
+                </div>
+
+                <!-- Gold Mega Pack (৳৫৯৯৯) -->
+                <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden glow-gold">
+                    <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 text-[10px] font-black px-4 py-1 rounded-bl-xl">VIP MEGA</div>
+                    <div class="space-y-4">
+                        <h4 class="text-lg font-bold text-amber-400">গোল্ড মেগা প্যাক (প্যাকেজ ৪)</h4>
+                        <div class="text-3xl font-black text-emerald-400"><span class="pkg-price" data-base="5999">৳৫,৯৯৯</span> <span class="text-xs text-slate-400 font-normal">/ মূল্য</span></div>
+                        <ul class="text-xs space-y-2 text-slate-300 border-y border-slate-800 py-4">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ৩৫টি স্ক্র্যাচ কার্ড (VIP)</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> নিশ্চিত পুরস্কার ফান্ড: <strong class="pkg-fund" data-base="10000000">৳১,০০,০০,০০০</strong></li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i> ৩ জন প্রফেসরের সিগনেচার সার্টিফিকেট</li>
+                        </ul>
+                    </div>
+                    <button onclick="openPurchaseModal('গোল্ড মেগা প্যাক', 5999, 35, 'gold')" class="mt-6 w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-2xl shadow transition">কোড দিয়ে কিনুন</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- LIVE AUTO-UPDATING LEADERBOARD SECTION -->
+        <section class="bg-slate-900 border border-amber-500/30 rounded-3xl p-6 sm:p-8 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-amber-400 flex items-center"><i class="fa-solid fa-ranking-star mr-2 text-amber-500"></i> লাইভ অটো-আপডেটিং উইনার লিডারবোর্ড</h3>
+                <span class="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full animate-pulse">🟢 রিয়েল-টাইম আপডেট হচ্ছে</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-950 text-slate-400 uppercase text-[10px]">
+                        <tr>
+                            <th class="p-3">র‍্যাংক</th>
+                            <th class="p-3">বিজয়ীর নাম ও দেশ</th>
+                            <th class="p-3">প্যাকেজ</th>
+                            <th class="p-3 text-right">মোট পুরস্কার</th>
+                        </tr>
+                    </thead>
+                    <tbody id="liveLeaderboardBody" class="divide-y divide-slate-800/60"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- GAME VIEW -->
+    <div id="checkoutView" class="max-w-4xl mx-auto px-4 py-10 flex-grow w-full hidden">
+        <div class="bg-slate-900 border border-amber-500/40 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-amber-400">প্যাকেজ কার্ড স্ক্র্যাচ গেম</h2>
+                    <p class="text-xs text-slate-400">তারিখ: <span id="gameViewDate" class="text-emerald-400 font-mono"></span> | কান্ট্রি/লোকেশন: <span id="gameViewLocation" class="text-amber-400">লোড হচ্ছে...</span></p>
+                </div>
+                <button onclick="showMainView()" class="text-xs text-slate-400 bg-slate-800 px-3 py-1.5 rounded-lg">← ফিরে যান</button>
+            </div>
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-wrap justify-between items-center text-sm gap-2">
+                <div><span>নির্বাচিত প্যাক:</span> <strong id="activePkgName" class="text-white">-</strong></div>
+                <div><span>এই প্যাকেজে জিতেছেন:</span> <strong id="currentPkgWonAmount" class="text-emerald-400 font-black">৳০</strong></div>
+            </div>
+            <div id="packageCardsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 max-h-[400px] overflow-y-auto p-2 bg-slate-950 rounded-xl"></div>
+            <div class="text-center pt-2">
+                <button onclick="openFinalCertificate()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-xs">৩ প্রফেসরের সিগনেচার সার্টিফিকেট দেখুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- USER DASHBOARD MODAL -->
+    <div id="userDashboardModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-emerald-500/50 rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto space-y-5 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-emerald-400"><i class="fa-solid fa-id-card mr-2"></i> ক্লায়েন্ট প্রোফাইল, ওয়ালেট, ভেরিফাইড প্যাকেজ ও সার্টিফিকেট</h3>
+                <button onclick="closeUserDashboard()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-center justify-between bg-slate-950 p-4 rounded-xl border border-slate-800 gap-4">
+                <div class="flex items-center space-x-4">
+                    <img id="dashUserImg" src="" class="w-16 h-16 rounded-full object-cover border-2 border-emerald-400">
+                    <div>
+                        <h4 id="dashUserName" class="text-base font-bold text-white">মেহেদী হাসান</h4>
+                        <p class="text-xs text-slate-400">ফোন/ইমেল: <span id="dashUserPhone" class="text-amber-400">01994500030</span></p>
+                        <p class="text-xs text-slate-300 mt-1">বর্তমান ব্যালেন্স: <strong id="dashUserBalance" class="text-emerald-400 text-sm">৳১৫,৫০০</strong></p>
+                        <p class="text-[11px] text-purple-400 mt-1">রেফারেল কোড: <strong id="dashReferCode" class="text-white font-mono"></strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 border-b border-slate-800 pb-3 text-xs">
+                <button onclick="switchProfileTab('deposit')" id="profTabDep" class="bg-emerald-600 text-white font-bold py-2 rounded-lg">ডিপোজিট</button>
+                <button onclick="switchProfileTab('withdraw')" id="profTabWd" class="bg-slate-800 text-slate-300 font-bold py-2 rounded-lg">উইথড্র</button>
+                <button onclick="switchProfileTab('packages')" id="profTabPkgs" class="bg-slate-800 text-slate-300 font-bold py-2 rounded-lg">অ্যাক্টিভ প্যাকেজ</button>
+                <button onclick="switchProfileTab('referral')" id="profTabRef" class="bg-slate-800 text-slate-300 font-bold py-2 rounded-lg">রেফারেল ও বোনাস</button>
+                <button onclick="switchProfileTab('history')" id="profTabHist" class="bg-slate-800 text-slate-300 font-bold py-2 rounded-lg">লেনদেন</button>
+                <button onclick="switchProfileTab('certificates')" id="profTabCert" class="bg-slate-800 text-slate-300 font-bold py-2 rounded-lg">সার্টিফিকেট</button>
+            </div>
+
+            <!-- Active Packages Tab -->
+            <div id="profSecPackages" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 hidden">
+                <h4 class="font-bold text-amber-400 text-sm"><i class="fa-solid fa-gamepad mr-1"></i> আপনার সফলভাবে অ্যাক্টিভ হওয়া প্যাকেজসমূহ (ক্লিক করলেই সরাসরি গেম ওপেন হবে)</h4>
+                <div id="userActivePackagesContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <div id="profSecDeposit" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs">
+                <h4 class="font-bold text-emerald-400 text-sm">ডিপোজিট রিকোয়েস্ট</h4>
+                <select id="depMethod" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
+                    <option value="bKash">📲 বিকাশ (bKash) - Personal: 01994500030</option>
+                    <option value="Nagad">📲 নগদ (Nagad) - Personal: 01994500030</option>
+                    <option value="Rocket">📲 রকেট (Rocket) - Personal: 01994500030</option>
+                </select>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input type="text" id="depSenderNo" placeholder="সেন্ডার নম্বর" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                    <input type="text" id="depTrxId" placeholder="TrxID" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                    <input type="number" id="depAmount" placeholder="পরিমাণ" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                </div>
+                <button onclick="submitDepositRequest()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl">ডিপোজিট সাবমিট করুন</button>
+            </div>
+
+            <!-- Withdraw Section -->
+            <div id="profSecWithdraw" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs hidden">
+                <h4 class="font-bold text-amber-400 text-sm">বাংলাদেশ ও গ্লোবাল ব্যাংক উইথড্র রিকোয়েস্ট (সকল বিভাগ, জেলা ও থানা/ব্রাঞ্চ)</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                    <select id="withdrawCountry" onchange="loadWithdrawBanks()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-slate-200">
+                        <option value="">-- দেশ সিলেক্ট --</option>
+                        <option value="Bangladesh">🇧🇩 বাংলাদেশ</option>
+                        <option value="USA_Europe">🇺🇸🇪🇺 আমেরিকা/ইউরোপ</option>
+                        <option value="MiddleEast">🇸🇦🇦🇪 মধ্যপ্রাচ্য</option>
+                        <option value="Asia_Global">🌏 এশিয়া ও গ্লোবাল</option>
+                    </select>
+                    <select id="wdDivisionSelect" onchange="loadDistrictsByDivision()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 font-bold">
+                        <option value="">-- বিভাগ --</option>
+                        <option value="Dhaka">ঢাকা বিভাগ</option>
+                        <option value="Chattogram">চট্টগ্রাম বিভাগ</option>
+                        <option value="Khulna">খুলনা বিভাগ</option>
+                        <option value="Rajshahi">রাজশাহী বিভাগ</option>
+                        <option value="Sylhet">সিলেট বিভাগ</option>
+                        <option value="Barishal">বরিশাল বিভাগ</option>
+                        <option value="Rangpur">রংপুর বিভাগ</option>
+                        <option value="Mymensingh">ময়মনসিংহ বিভাগ</option>
+                    </select>
+                    <select id="wdDistrictSelect" onchange="loadThanasByDistrict()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-amber-300 font-bold">
+                        <option value="">-- জেলা --</option>
+                    </select>
+                    <select id="wdThanaSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-emerald-300 font-bold">
+                        <option value="">-- থানা/ব্রাঞ্চ --</option>
+                    </select>
+                    <select id="wdBankSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 font-bold">
+                        <option value="">-- ব্যাংক/MFS --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <select id="wdBranchSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-purple-300">
+                        <option value="">-- ব্রাঞ্চ নেটওয়ার্ক --</option>
+                    </select>
+                    <input type="text" id="wdAccNumber" placeholder="অ্যাকাউন্ট নম্বর" oninput="autoSuggestAccountName(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2">
+                    <input type="text" id="wdAccHolderName" placeholder="হোল্ডারের নাম" class="w-full bg-slate-900 border border-emerald-500 rounded-lg px-2.5 py-2 text-emerald-400 font-bold">
+                    <input type="number" id="wdAmount" placeholder="পরিমাণ" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2">
+                </div>
+                <input type="password" id="wdSecurityPin" maxlength="4" placeholder="৪ সংখ্যার উইথড্র পিন" class="w-full bg-slate-900 border border-amber-500 rounded-lg px-3 py-2 text-amber-400 font-bold text-center tracking-widest">
+                <button onclick="submitWithdrawRequest()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl">উইথড্র সাবমিট করুন</button>
+            </div>
+
+            <div id="profSecReferral" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs hidden">
+                <h4 class="font-bold text-purple-400 text-sm">রেফারেল বোনাস</h4>
+                <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-2">
+                    <p class="text-slate-300">রেফারেল লিংক:</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="userReferralLinkInput" readonly class="flex-grow bg-slate-950 border border-slate-700 rounded px-2 py-1 text-amber-400 font-mono text-[11px]">
+                        <button onclick="copyReferralLink()" class="bg-purple-600 text-white px-3 py-1 rounded font-bold">কপি</button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800">
+                    <div>
+                        <span class="text-slate-400 block">বোনাস অর্জিত:</span>
+                        <strong id="dashReferBonusAmount" class="text-emerald-400 text-sm font-black">৳০</strong>
+                    </div>
+                    <button onclick="claimReferralBonus()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl">বোনাস ক্লেইম করুন</button>
+                </div>
+                <div id="referredUsersListArea" class="space-y-1 max-h-32 overflow-y-auto text-[11px] text-slate-400"></div>
+            </div>
+
+            <div id="profSecHistory" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs hidden">
+                <div id="historyContentArea" class="space-y-2 max-h-48 overflow-y-auto text-slate-300"></div>
+            </div>
+
+            <div id="profSecCertificates" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs hidden">
+                <div id="certificateGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <button onclick="closeUserDashboard()" class="w-full bg-slate-800 text-slate-200 py-2 rounded-xl text-xs font-bold">বন্ধ করুন</button>
+        </div>
+    </div>
+
+    <!-- PURCHASE MODAL WITH PROMINENT ADMIN CODE BUTTON & INSTANT COUNTRY AUTO-DETECTION -->
+    <div id="purchaseModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 w-full max-w-md space-y-3 shadow-2xl text-xs">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <div>
+                    <h3 class="text-base font-bold text-amber-400">প্যাকেজ কোড ও নম্বর ভেরিফিকেশন</h3>
+                    <p id="purchaseModalPkgSubtitle" class="text-emerald-400 font-bold"></p>
+                </div>
+                <button onclick="closePurchaseModal()" class="text-slate-400"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <!-- Highly Visible Prominent Admin Code Button -->
+            <div class="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 p-3 rounded-xl text-center shadow-lg animate-pulse">
+                <button onclick="openChatForAdminCode()" class="w-full text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center space-x-2 hover:scale-105 transition">
+                    <i class="fa-solid fa-key text-base"></i>
+                    <span>"অ্যাডমিন কোড নিতে আবেদন করুন" - সরাসরি মেসেজ দিন</span>
+                </button>
+            </div>
+
+            <input type="text" id="buyerName" placeholder="পূর্ণ নাম" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2">
+            
+            <div>
+                <label class="text-[10px] text-slate-400 block mb-1">মোবাইল নম্বর দিন (নম্বর বসানোর সাথে সাথে দেশ ও কোড অটো সেট হবে):</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <select id="buyerCountryCode" onchange="onManualCountryCodeChange()" class="bg-slate-950 border border-amber-500 rounded-lg px-2 py-2 text-amber-400 font-bold">
+                        <option value="+880">+880 (BD)</option>
+                        <option value="+91">+91 (IN)</option>
+                        <option value="+1">+1 (USA)</option>
+                        <option value="+44">+44 (UK)</option>
+                        <option value="+966">+966 (KSA)</option>
+                        <option value="+971">+971 (UAE)</option>
+                    </select>
+                    <input type="text" id="buyerPhoneNumOnly" placeholder="নম্বর (যেমন: 0199... বা 98...)" oninput="detectCountryFromNumberInput()" class="col-span-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                </div>
+            </div>
+
+            <div>
+                <label class="text-[10px] text-slate-400 block mb-1">অটো ডিটেক্টকৃত দেশ:</label>
+                <input type="text" id="buyerDetectedCountryDisplay" readonly class="w-full bg-slate-950 border border-emerald-500 rounded-lg px-3 py-2 text-emerald-400 font-black" value="বাংলাদেশ (BDT - +880)">
+            </div>
+
+            <input type="text" id="buyerAdminCode" placeholder="অ্যাডমিন কোড (যেমন: STR-1234)" class="w-full bg-slate-950 border border-amber-500 rounded-lg px-3 py-2 text-amber-400 font-bold">
+            
+            <div>
+                <label class="text-[10px] text-slate-400 block mb-1">পেমেন্ট রসিদ বা ছবি আপলোড:</label>
+                <input type="file" id="buyerImageUpload" accept="image/*" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-300">
+            </div>
+
+            <button onclick="submitPackageApplication()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl cursor-pointer shadow">আবেদন পাঠান (Pending)</button>
+        </div>
+    </div>
+
+    <!-- SPIN & STREAK MODALS -->
+    <div id="spinModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-pink-500/50 rounded-3xl p-6 w-full max-w-md text-center space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-pink-400">ডেইলি স্পিন হুইল</h3>
+                <button onclick="document.getElementById('spinModal').classList.add('hidden')" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p id="spinCooldownMsg" class="text-xs text-amber-400 font-bold"></p>
+            <div class="py-2 flex flex-col items-center">
+                <div class="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[20px] border-b-amber-400 z-20 mb-[-10px]"></div>
+                <canvas id="wheelCanvas" width="260" height="260" class="transition-transform duration-4000 cubic-bezier(0.15, 0.9, 0.2, 1)"></canvas>
+            </div>
+            <button id="spinTriggerBtn" onclick="spinTheWheel()" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold py-3 rounded-xl">স্পিন করুন</button>
+        </div>
+    </div>
+
+    <div id="dailyStreakModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-emerald-500/50 rounded-2xl p-6 w-full max-w-md text-center space-y-4 shadow-2xl">
+            <h3 class="text-base font-bold text-emerald-400">ডেইলি স্ট্রিক বোনাস</h3>
+            <p id="streakCooldownMsg" class="text-xs text-amber-400 font-bold"></p>
+            <div id="streakDaysGrid" class="grid grid-cols-4 gap-2 py-2"></div>
+            <button id="claimStreakBtn" onclick="claimStreakBonus()" class="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">বোনাস ক্লেইম করুন</button>
+            <button onclick="document.getElementById('dailyStreakModal').classList.add('hidden')" class="text-xs text-slate-400">বন্ধ</button>
+        </div>
+    </div>
+
+    <!-- CERTIFICATE MODAL -->
+    <div id="certificateModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 w-full max-w-xl text-center space-y-4 shadow-2xl">
+            <div id="printableCertificate" class="bg-slate-950 border-4 border-amber-500/80 p-6 rounded-2xl space-y-3 relative text-left">
+                <div class="flex justify-between text-[10px] text-amber-400 font-mono border-b border-slate-800 pb-2">
+                    <span>তারিখ: <strong id="certDateDisplay" class="text-emerald-400"></strong></span>
+                    <span>আইডি: <strong id="certIdDisplay" class="text-emerald-400"></strong></span>
+                </div>
+                <div class="text-center space-y-1 pt-2">
+                    <h4 class="text-lg font-black text-amber-400 tracking-wider">GLOBAL LOTTO CHAMPION CERTIFICATE</h4>
+                    <p class="text-[10px] text-slate-400">Official Award Verification Document</p>
+                </div>
+                <div class="flex items-center space-x-4 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <img id="certUserImg" crossorigin="anonymous" src="" class="w-14 h-14 rounded-full object-cover border-2 border-amber-400 shadow-md">
+                    <div>
+                        <h5 id="certUserName" class="text-sm font-bold text-white"></h5>
+                        <p class="text-xs text-slate-300">Winning Prize: <span id="certPrizeAmount" class="text-emerald-400 font-black text-sm">৳০</span></p>
+                        <p class="text-[10px] text-amber-300">দেশ/লোকেশন: <span id="certLocationDisplay"></span></p>
+                    </div>
+                    <div id="certQrCodeBox" class="bg-white p-1 rounded-lg w-16 h-16 flex items-center justify-center ml-auto"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-4 border-t border-slate-800 text-[10px] text-slate-300 text-center">
+                    <div>
+                        <div class="signature-font text-amber-400 text-sm">Dr. M. A. Quddus</div>
+                        <div class="border-t border-slate-700 mt-1 pt-0.5">ড. মো. আব্দুল কুদ্দুস<br>চেয়ারম্যান</div>
+                    </div>
+                    <div>
+                        <div class="signature-font text-amber-400 text-sm">Prof. J. Houston</div>
+                        <div class="border-t border-slate-700 mt-1 pt-0.5">প্রফেসর জেমস হিউস্টন<br>সিটিও</div>
+                    </div>
+                    <div>
+                        <div class="signature-font text-amber-400 text-sm">Dr. Fatima Rahman</div>
+                        <div class="border-t border-slate-700 mt-1 pt-0.5">ড. ফাতিমা রহমান<br>হেড অব সিকিউরিটি</div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button onclick="downloadCertificateAsImage()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-download"></i> <span>ছবি হিসেবে ডাউনলোড করুন</span>
+                </button>
+                <button onclick="document.getElementById('certificateModal').classList.add('hidden')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold">বন্ধ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIGN UP & SIGN IN MODALS -->
+    <div id="signUpModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 w-full max-w-md space-y-3 text-xs">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="text-base font-bold text-amber-400">নতুন অ্যাকাউন্ট সাইন আপ</h3>
+                <button onclick="closeSignUpModal()" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="text" id="suName" placeholder="পূর্ণ নাম" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="text" id="suPhone" placeholder="মোবাইল নম্বর" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="email" id="suEmail" placeholder="ইমেল অ্যাড্রেস" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="password" id="suPass" placeholder="পাসওয়ার্ড" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="password" id="suConfirmPass" placeholder="কনফার্ম পাসওয়ার্ড" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="password" id="suPin" maxlength="4" placeholder="৪ সংখ্যার উইথড্র পিন" class="w-full bg-slate-950 border border-amber-500 rounded p-2 text-amber-400 font-bold">
+            <input type="text" id="suReferCode" placeholder="রেফারেল কোড (যদি থাকে)" class="w-full bg-slate-950 border border-slate-700 rounded p-2 font-mono">
+            <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex justify-between items-center">
+                <span id="captchaQuestionText" class="font-bold text-amber-400">৭ + ৫ = কত?</span>
+                <input type="number" id="captchaAnswerInput" placeholder="উত্তর" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-center">
+            </div>
+            <button onclick="handleSignUp()" class="w-full bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl">রেজিস্ট্রেশন করুন</button>
+        </div>
+    </div>
+
+    <div id="signInModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-blue-500/50 rounded-2xl p-6 w-full max-w-md space-y-3 text-xs">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="text-base font-bold text-blue-400">সাইন ইন</h3>
+                <button onclick="closeSignInModal()" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="text" id="siPhoneOrEmail" placeholder="মোবাইল নম্বর বা ইমেল" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <input type="password" id="siPass" placeholder="পাসওয়ার্ড" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <button onclick="handleSignIn()" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl">লগইন করুন</button>
+            
+            <div class="text-center pt-2 border-t border-slate-800">
+                <p class="text-[11px] text-slate-400">পাসওয়ার্ড ভুলে গেছেন? 
+                    <span onclick="openForgotPasswordChat()" class="text-amber-400 font-bold cursor-pointer underline hover:text-amber-300">অ্যাডমিনের সাথে লাইভ চ্যাট করে ঠিক করুন</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN LOGIN MODAL -->
+    <div id="adminLoginModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-purple-500/50 rounded-2xl p-6 w-full max-w-sm space-y-3 text-center">
+            <h4 class="text-sm font-bold text-purple-400"><i class="fa-solid fa-lock mr-1"></i> সিক্রেট অ্যাডমিন পোর্টাল</h4>
+            <input type="password" id="adminPasswordInput" placeholder="সিক্রেট পাসওয়ার্ড" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-slate-200 tracking-widest text-xs">
+            <div class="flex space-x-2">
+                <button onclick="verifyAdminPassword()" class="flex-grow bg-purple-600 text-white font-bold py-2 rounded text-xs">লগইন</button>
+                <button onclick="document.getElementById('adminLoginModal').classList.add('hidden')" class="bg-slate-800 text-slate-300 px-3 py-2 rounded text-xs">বাতিল</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MASTER ADMIN DASHBOARD WITH SEPARATE NAME-BY-NAME CODE REPLY BUTTON -->
+    <div id="adminModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-purple-500/50 rounded-2xl p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto space-y-5 shadow-2xl text-xs">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-purple-400">মাস্টার অ্যাডমিন কন্ট্রোল প্যানেল</h3>
+                <button onclick="document.getElementById('adminModal').classList.add('hidden')" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-purple-500/40 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">হেডার নোটিশ পরিবর্তন:</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="adminNoticeInput" placeholder="নতুন নোটিশ..." class="flex-grow bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200">
+                        <button onclick="updateAdminNotice()" class="bg-purple-600 text-white font-bold px-3 py-1.5 rounded">সেভ</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">লটারি ড্র নম্বর আপডেট:</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="adminDrawNoInput" placeholder="ড্র নম্বর" class="flex-grow bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200">
+                        <button onclick="updateAdminDrawNo()" class="bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded">আপডেট</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Search & Password/PIN Reset -->
+            <div class="bg-slate-950 p-3 rounded-xl border border-purple-500/40 space-y-2">
+                <div class="flex gap-2 items-center">
+                    <input type="text" id="adminSearchQuery" placeholder="ক্লায়েন্টের নাম বা ফোন নম্বর দিয়ে সার্চ করুন..." class="flex-grow bg-slate-900 border border-slate-700 rounded px-3 py-2 text-slate-200">
+                    <button onclick="searchClientDetails()" class="bg-purple-600 text-white font-bold px-4 py-2 rounded">সার্চ</button>
+                </div>
+                <div id="adminClientSearchResult" class="bg-slate-900 p-3 rounded-xl border border-slate-800 hidden text-amber-300 space-y-2"></div>
+            </div>
+
+            <div class="flex space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
+                <button onclick="switchAdminTab('packages')" class="bg-purple-600 text-white font-bold px-3 py-1.5 rounded-lg">প্যাকেজ আবেদন</button>
+                <button onclick="switchAdminTab('codeReplies')" class="bg-amber-500 text-slate-950 font-black px-3 py-1.5 rounded-lg"><i class="fa-solid fa-reply-all mr-1"></i> কোড আবেদন ও নামে নামে রিপ্লাই</button>
+                <button onclick="switchAdminTab('passRequests')" class="bg-slate-800 text-slate-300 font-bold px-3 py-1.5 rounded-lg">পাসওয়ার্ড আবেদন (<span id="passReqBadge">০</span>)</button>
+                <button onclick="switchAdminTab('deposits')" class="bg-slate-800 text-slate-300 font-bold px-3 py-1.5 rounded-lg">ডিপোজিট</button>
+                <button onclick="switchAdminTab('withdraws')" class="bg-slate-800 text-slate-300 font-bold px-3 py-1.5 rounded-lg">উইথড্র</button>
+                <button onclick="switchAdminTab('liveChats')" class="bg-slate-800 text-slate-300 font-bold px-3 py-1.5 rounded-lg">চ্যাট রিপ্লাই</button>
+                <button onclick="switchAdminTab('genCodes')" class="bg-slate-800 text-slate-300 font-bold px-3 py-1.5 rounded-lg">কোড জেনারেটর</button>
+            </div>
+
+            <div id="adminSecPackages" class="space-y-4">
+                <table class="w-full text-left bg-slate-950 rounded-xl overflow-hidden">
+                    <thead class="border-b border-slate-800"><tr><th class="p-2">ইউজার ও ছবি</th><th class="p-2">প্যাকেজ</th><th class="p-2">দেশ ও নম্বর</th><th class="p-2">স্ট্যাটাস</th><th class="p-2 text-right">অ্যাকশন</th></tr></thead>
+                    <tbody id="adminPackageRequestsTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Dedicated Section for Name-by-Name Code Reply -->
+            <div id="adminSecCodeReplies" class="space-y-4 hidden">
+                <div class="bg-amber-500/10 border border-amber-500/40 p-3 rounded-xl text-amber-300 font-bold">
+                    <i class="fa-solid fa-user-tag mr-1"></i> কোডের জন্য এসএমএস করা প্রতিটি ক্লায়েন্টের নাম আলাদাভাবে দেখানো হচ্ছে। প্রতিটি নামের পাশে আলাদাভাবে কোড বা মেসেজ রিপ্লাই দিন:
+                </div>
+                <div id="adminNameByNameReplyList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+
+            <!-- Password Change Requests Admin Section -->
+            <div id="adminSecPassRequests" class="space-y-4 hidden">
+                <table class="w-full text-left bg-slate-950 rounded-xl overflow-hidden">
+                    <thead class="border-b border-slate-800"><tr><th class="p-2">ক্লায়েন্টের নাম ও ফোন</th><th class="p-2">বর্তমান পাসওয়ার্ড</th><th class="p-2">নতুন পাসওয়ার্ড দিন</th><th class="p-2 text-right">অ্যাকশন</th></tr></thead>
+                    <tbody id="adminPassRequestsTable"></tbody>
+                </table>
+            </div>
+
+            <div id="adminSecDeposits" class="space-y-4 hidden">
+                <table class="w-full text-left bg-slate-950 rounded-xl overflow-hidden">
+                    <thead class="border-b border-slate-800"><tr><th class="p-2">মাধ্যম</th><th class="p-2">নম্বর</th><th class="p-2">TrxID</th><th class="p-2">পরিমাণ</th><th class="p-2">স্ট্যাটাস</th><th class="p-2 text-right">অ্যাকশন</th></tr></thead>
+                    <tbody id="adminDepositTable"></tbody>
+                </table>
+            </div>
+
+            <div id="adminSecWithdraws" class="space-y-4 hidden">
+                <table class="w-full text-left bg-slate-950 rounded-xl overflow-hidden">
+                    <thead class="border-b border-slate-800"><tr><th class="p-2">ব্যাংক ও ব্রাঞ্চ</th><th class="p-2">অ্যাকাউন্ট ও নাম</th><th class="p-2">পরিমাণ</th><th class="p-2">স্ট্যাটাস</th><th class="p-2 text-right">অ্যাকশন</th></tr></thead>
+                    <tbody id="adminWithdrawTable"></tbody>
+                </table>
+            </div>
+
+            <div id="adminSecLiveChats" class="space-y-3 hidden">
+                <div class="flex flex-wrap gap-2 items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <h4 class="font-bold text-amber-400">নির্দিষ্ট ক্লায়েন্টের নামে চ্যাট ও রিপ্লাই:</h4>
+                    <select id="adminChatClientSelector" onchange="renderAdminSelectedClientChat()" class="bg-slate-900 border border-amber-500 rounded px-3 py-1.5 text-amber-300 font-bold"></select>
+                </div>
+                <div id="adminLiveChatInbox" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <div id="adminSecGenCodes" class="space-y-4 hidden">
+                <div class="bg-slate-950 p-4 rounded-xl border border-amber-500/40 flex flex-wrap gap-2">
+                    <select id="adminGenPkgSelect" class="bg-slate-900 border border-slate-700 rounded p-2">
+                        <option value="starter">স্টার্টার প্যাক (৳১,২৯৯)</option>
+                        <option value="bronze">ব্রোঞ্জ প্যাক (৳২,৪৯৯)</option>
+                        <option value="silver">সিলভার প্যাক (৳৪,৯৯৯)</option>
+                        <option value="gold">গোল্ড মেগা প্যাক (৳৫,৯৯৯)</option>
+                    </select>
+                    <button onclick="generateSingleUseCode()" class="bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded">নতুন কোড তৈরি</button>
+                    <span id="generatedCodeDisplay" class="text-emerald-400 font-mono font-bold self-center pl-2"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-slate-900 border-t border-slate-800 mt-12 py-6 px-4 text-center text-xs text-slate-500">
+        <p>&copy; ২০২৬ গ্লোবাল লটারি ও ইনভেস্টমেন্ট প্ল্যাটফর্ম। সর্বস্বত্ব সংরক্ষিত।</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

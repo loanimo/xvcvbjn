@@ -1,0 +1,1247 @@
+let rawSavedBalance = Number(localStorage.getItem('lotto_balance'));
+let balance = (!Number.isNaN(rawSavedBalance) && localStorage.getItem('lotto_balance') !== null) ? rawSavedBalance : 15500;
+let currentPackageSessionWon = 0;
+
+let pendingApplications = JSON.parse(localStorage.getItem('lotto_pendingApps')) || [];
+let depositRequests = JSON.parse(localStorage.getItem('lotto_deposits')) || [];
+let withdrawRequests = JSON.parse(localStorage.getItem('lotto_withdraws')) || [];
+let certificateArchive = JSON.parse(localStorage.getItem('lotto_certArchive')) || [];
+let passwordResetRequests = JSON.parse(localStorage.getItem('lotto_passRequests')) || [];
+
+let chatThreads = JSON.parse(localStorage.getItem('lotto_chatThreads')) || {
+    "01994500030": {
+        clientName: "মেহেদী হাসান",
+        messages: [
+            { sender: 'admin', text: 'স্বাগতম! গ্লোবাল লটারি প্রো-তে আপনাকে কীভাবে সাহায্য করতে পারি?' }
+        ]
+    }
+};
+
+let generatedPackageCodes = JSON.parse(localStorage.getItem('lotto_genCodes')) || [
+    { code: "STR-1234", tier: "starter", used: false },
+    { code: "BRZ-1234", tier: "bronze", used: false },
+    { code: "SLV-1234", tier: "silver", used: false },
+    { code: "GLD-1234", tier: "gold", used: false }
+];
+
+let currentUser = JSON.parse(localStorage.getItem('lotto_currentUser')) || {
+    name: "মেহেদী হাসান", phone: "01994500030", email: "mehedi@gmail.com", pass: "123456", withdrawPin: "1234",
+    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    myReferCode: "REF-1001", referredBy: "", referralBonus: 1500, streakDay: 1, lastSpinTime: 0, lastStreakTime: 0, location: "বাংলাদেশ (+880)"
+};
+
+let allRegisteredUsers = JSON.parse(localStorage.getItem('lotto_allUsers')) || [currentUser];
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    
+    if (type === 'spin') {
+        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'win') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+    }
+}
+
+function saveData() {
+    if (Number.isNaN(balance)) balance = 15500;
+    localStorage.setItem('lotto_balance', balance);
+    localStorage.setItem('lotto_pendingApps', JSON.stringify(pendingApplications));
+    localStorage.setItem('lotto_deposits', JSON.stringify(depositRequests));
+    localStorage.setItem('lotto_withdraws', JSON.stringify(withdrawRequests));
+    localStorage.setItem('lotto_certArchive', JSON.stringify(certificateArchive));
+    localStorage.setItem('lotto_passRequests', JSON.stringify(passwordResetRequests));
+    localStorage.setItem('lotto_genCodes', JSON.stringify(generatedPackageCodes));
+    localStorage.setItem('lotto_currentUser', JSON.stringify(currentUser));
+    localStorage.setItem('lotto_allUsers', JSON.stringify(allRegisteredUsers));
+    localStorage.setItem('lotto_chatThreads', JSON.stringify(chatThreads));
+}
+
+let logoClickCount = 0;
+let logoClickTimer = null;
+function handleLogoTripleClick() {
+    logoClickCount++;
+    if (logoClickCount === 3) {
+        logoClickCount = 0;
+        clearTimeout(logoClickTimer);
+        document.getElementById('adminLoginModal').classList.remove('hidden');
+    } else {
+        clearTimeout(logoClickTimer);
+        logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 600);
+    }
+}
+
+const rates = {
+    'BDT': { rate: 1, symbol: '৳' },
+    'USD': { rate: 0.0083, symbol: '$' },
+    'EUR': { rate: 0.0076, symbol: '€' },
+    'GBP': { rate: 0.0065, symbol: '£' },
+    'INR': { rate: 0.70, symbol: '₹' },
+    'SAR': { rate: 0.031, symbol: 'SAR ' },
+    'AED': { rate: 0.030, symbol: 'AED ' }
+};
+
+function changeCurrency() {
+    if (Number.isNaN(balance)) balance = 15500;
+    let cur = document.getElementById('currencySelector').value;
+    let cfg = rates[cur] || rates['BDT'];
+    document.getElementById('userBalance').innerText = cfg.symbol + Math.round(balance * cfg.rate).toLocaleString();
+
+    document.querySelectorAll('.pkg-price').forEach(el => {
+        let base = Number(el.dataset.base);
+        let converted = Math.round(base * cfg.rate);
+        el.innerText = cfg.symbol + converted.toLocaleString();
+    });
+    document.querySelectorAll('.pkg-fund').forEach(el => {
+        let base = Number(el.dataset.base);
+        let converted = Math.round(base * cfg.rate);
+        el.innerText = cfg.symbol + converted.toLocaleString();
+    });
+}
+
+window.onload = function() {
+    changeCurrency();
+    updateProfileUI();
+    drawWheel();
+    startCountdown();
+    generateCaptcha();
+    startLiveActivityPopups();
+    startAutoUpdatingLeaderboard();
+    updateClientNotificationBar();
+    
+    let baseReg = 28450 + allRegisteredUsers.length;
+    document.getElementById('statTotalUsers').innerText = baseReg.toLocaleString() + "+";
+    setInterval(() => {
+        let onlineCount = Math.floor(Math.random() * 150) + 1380;
+        document.getElementById('statOnlineUsers').innerText = onlineCount.toLocaleString();
+    }, 5000);
+
+    let savedNotice = localStorage.getItem('lotto_notice');
+    if (savedNotice) document.getElementById('adminNoticeTicker').innerText = savedNotice;
+    let savedDrawNo = localStorage.getItem('lotto_drawNo');
+    if (savedDrawNo) document.getElementById('megaDrawNumber').innerText = savedDrawNo;
+};
+
+// Auto-Updating Live Leaderboard
+let leaderboardData = [
+    { name: "তানভীর আহমেদ", country: "🇧🇩 বাংলাদেশ", pkg: "গোল্ড মেগা প্যাক", amount: 850000 },
+    { name: "রাহুল শর্মা", country: "🇮🇳 ভারত", pkg: "সিলভার প্যাক", amount: 640000 },
+    { name: "আব্দুল্লাহ আল মামুন", country: "🇸🇦 সৌদি আরব", pkg: "গোল্ড মেগা প্যাক", amount: 520000 },
+    { name: "সাদিয়া ইসলাম", country: "🇧🇩 বাংলাদেশ", pkg: "ব্রোঞ্জ প্যাক", amount: 390000 },
+    { name: "ডেভিড জনসন", country: "🇺🇸 আমেরিকা", pkg: "স্টার্টার প্যাক", amount: 275000 }
+];
+
+function renderLeaderboard() {
+    let tbody = document.getElementById('liveLeaderboardBody');
+    if (!tbody) return;
+    leaderboardData.sort((a, b) => b.amount - a.amount);
+    tbody.innerHTML = leaderboardData.map((item, idx) => {
+        let badge = idx === 0 ? '🥇 #1' : (idx === 1 ? '🥈 #2' : (idx === 2 ? '🥉 #3' : `#${idx+1}`));
+        return `
+            <tr class="hover:bg-slate-800/40 transition">
+                <td class="p-3 font-black ${idx===0?'text-amber-400 text-sm':'text-slate-300'}">${badge}</td>
+                <td class="p-3"><strong>${item.name}</strong> <span class="text-[11px] text-slate-400 ml-1">(${item.country})</span></td>
+                <td class="p-3 text-amber-300">${item.pkg}</td>
+                <td class="p-3 text-right font-black text-emerald-400">৳${item.amount.toLocaleString()}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function startAutoUpdatingLeaderboard() {
+    renderLeaderboard();
+    setInterval(() => {
+        let randIdx = Math.floor(Math.random() * leaderboardData.length);
+        let boost = Math.floor(Math.random() * 45000) + 15000;
+        leaderboardData[randIdx].amount += boost;
+        renderLeaderboard();
+    }, 4000);
+}
+
+function updateClientNotificationBar() {
+    let myApprovedPkgs = pendingApplications.filter(p => p.phone === currentUser.phone && p.status === 'Approved');
+    let badgeEl = document.getElementById('activePkgCountBadge');
+    let actionArea = document.getElementById('notificationBarActionArea');
+    if (badgeEl) badgeEl.innerText = myApprovedPkgs.length;
+
+    if (myApprovedPkgs.length > 0) {
+        document.getElementById('clientNotificationText').innerText = `🎉 অভিনন্দন! আপনার ${myApprovedPkgs.length}টি প্যাকেজ অ্যাক্টিভ হয়েছে! এখনি গেম খেলুন!`;
+        let lastPkg = myApprovedPkgs[myApprovedPkgs.length - 1];
+        actionArea.innerHTML = `
+            <button onclick="selectPackageFromDashboard('${lastPkg.pkgName}', ${lastPkg.count})" class="bg-slate-950 text-emerald-400 hover:bg-slate-900 px-3.5 py-1 rounded-full text-xs font-black animate-bounce shadow">
+                <i class="fa-solid fa-gamepad mr-1"></i> সরাসরি গেম খেলুন (${lastPkg.pkgName})
+            </button>
+        `;
+    } else {
+        document.getElementById('clientNotificationText').innerText = `📢 নোটিশ: প্যাকেজ কেনার পর অ্যাডমিন এপ্রুভ করলেই সরাসরি গেম খেলতে পারবেন!`;
+        actionArea.innerHTML = `<button onclick="openUserDashboard('packages')" class="bg-slate-950 text-amber-400 hover:bg-slate-900 px-3 py-1 rounded-full text-[11px] transition shadow">অ্যাক্টিভ প্যাকেজ: <strong id="activePkgCountBadge">০</strong></button>`;
+    }
+}
+
+function updateProfileUI() {
+    document.getElementById('barUserName').innerText = currentUser.name;
+    document.getElementById('barUserImg').src = currentUser.image;
+    document.getElementById('barReferCode').innerText = currentUser.myReferCode;
+    let refInput = document.getElementById('userReferralLinkInput');
+    let fullRefUrl = `https://global-lotto.com/?ref=${currentUser.myReferCode}`;
+    if (refInput) refInput.value = fullRefUrl;
+    
+    let bonusEl = document.getElementById('dashReferBonusAmount');
+    if (bonusEl) bonusEl.innerText = `৳${currentUser.referralBonus || 0}`;
+
+    let listArea = document.getElementById('referredUsersListArea');
+    if (listArea) {
+        let refs = allRegisteredUsers.filter(u => u.referredBy === currentUser.myReferCode);
+        listArea.innerHTML = refs.length > 0 ? refs.map(r => `<div class="bg-slate-900 p-1.5 rounded flex justify-between"><span>${r.name} (${r.phone})</span><span class="text-emerald-400 font-bold">+৳৫০০ বোনাস</span></div>`).join('') : '<p class="text-slate-500">এখনো কেউ আপনার রেফার কোড ব্যবহার করেনি।</p>';
+    }
+}
+
+function copyReferralLink() {
+    let input = document.getElementById('userReferralLinkInput');
+    input.select();
+    navigator.clipboard.writeText(input.value);
+    showBottomLeftPopup('✅ রেফারেল লিংক কপি হয়েছে!');
+}
+
+function claimReferralBonus() {
+    let bonus = currentUser.referralBonus || 0;
+    if (bonus <= 0) { alert('❌ ক্লেইম করার মতো কোনো রেফারেল বোনাস নেই!'); return; }
+    balance += bonus;
+    currentUser.referralBonus = 0;
+    saveData(); changeCurrency(); updateProfileUI(); triggerConfetti(); playSound('win');
+    showBottomLeftPopup(`🎉 সফলভাবে ৳${bonus} রেফারেল বোনাস মেইন ব্যালেন্সে যোগ হয়েছে!`);
+}
+
+function showBottomLeftPopup(text) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = "bg-slate-900/95 border border-emerald-500/60 text-emerald-300 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center";
+    toast.innerHTML = `<i class="fa-solid fa-bell text-amber-400 mr-2"></i><span>${text}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+function startLiveActivityPopups() {
+    const activities = [
+        { type: 'wd', name: "রহিম ভাই (ঢাকা)", text: "বিকাশে ৳৫,০০০ উইথড্র সফল করেছেন!" },
+        { type: 'pkg', name: "তানভীর আহমেদ (সিলেট)", text: "৳৫,৯৯৯ দিয়ে গোল্ড মেগা প্যাক কিনেছেন!" },
+        { type: 'wd', name: "করিম মিয়া (চট্টগ্রাম)", text: "নগদে ৳১২,৫০০ উইথড্র সফল করেছেন!" },
+        { type: 'pkg', name: "সাদিয়া ইসলাম (খুলনা)", text: "৳১,২৯৯ দিয়ে স্টার্টার প্যাক কিনেছেন!" }
+    ];
+    let idx = 0;
+    setInterval(() => {
+        idx = (idx + 1) % activities.length;
+        let act = activities[idx];
+        document.getElementById('tickerUserName').innerText = act.name;
+        let textEl = document.getElementById('tickerWdText');
+        let iconBox = document.getElementById('tickerIconBox');
+        
+        textEl.innerText = act.text;
+        if (act.type === 'pkg') {
+            textEl.className = "text-amber-400 font-bold";
+            iconBox.className = "bg-amber-500 text-slate-950 p-2 rounded-xl";
+            iconBox.innerHTML = `<i class="fa-solid fa-box-open"></i>`;
+        } else {
+            textEl.className = "text-emerald-400 font-bold";
+            iconBox.className = "bg-emerald-500 text-slate-950 p-2 rounded-xl";
+            iconBox.innerHTML = `<i class="fa-solid fa-money-bill-transfer"></i>`;
+        }
+    }, 4500);
+}
+
+function detectCountryFromNumberInput() {
+    let codeSel = document.getElementById('buyerCountryCode');
+    let numInp = document.getElementById('buyerPhoneNumOnly');
+    let val = numInp.value.trim();
+
+    if (val.startsWith("+91") || val.startsWith("91")) {
+        codeSel.value = "+91";
+    } else if (val.startsWith("+1") || (val.startsWith("1") && !val.startsWith("19") && !val.startsWith("17") && !val.startsWith("18") && !val.startsWith("16") && !val.startsWith("15"))) {
+        codeSel.value = "+1";
+    } else if (val.startsWith("+44") || val.startsWith("44")) {
+        codeSel.value = "+44";
+    } else if (val.startsWith("+966") || val.startsWith("966")) {
+        codeSel.value = "+966";
+    } else if (val.startsWith("+971") || val.startsWith("971")) {
+        codeSel.value = "+971";
+    } else if (val.startsWith("+880") || val.startsWith("880") || val.startsWith("01")) {
+        codeSel.value = "+880";
+    }
+
+    updateDetectedCountryDisplay();
+}
+
+function onManualCountryCodeChange() {
+    updateDetectedCountryDisplay();
+}
+
+function updateDetectedCountryDisplay() {
+    let codeVal = document.getElementById('buyerCountryCode').value;
+    let display = document.getElementById('buyerDetectedCountryDisplay');
+    const countryMap = {
+        "+880": "বাংলাদেশ (BDT - +880)",
+        "+91": "ভারত / India (INR - +91)",
+        "+1": "যুক্তরাষ্ট্র / USA (USD - +1)",
+        "+44": "যুক্তরাজ্য / UK (GBP - +44)",
+        "+966": "সৌদি আরব / Saudi Arabia (SAR - +966)",
+        "+971": "দুবাই / UAE (AED - +971)"
+    };
+    if (display) {
+        display.value = countryMap[codeVal] || "বাংলাদেশ (BDT - +880)";
+    }
+}
+
+function toggleChatBox() {
+    let box = document.getElementById('chatBoxContainer');
+    box.classList.toggle('hidden');
+}
+
+function openChatForAdminCode() {
+    closePurchaseModal();
+    toggleChatBox();
+    let pkgInfo = selectedPkgObj ? `${selectedPkgObj.name} (৳${selectedPkgObj.price})` : "প্যাকেজ";
+    let msg = `স্যার, আমি ${pkgInfo} কিনতে চাই। দয়া করে আমার নামে একটি অ্যাডমিন কোড দিন।`;
+    if (!chatThreads[currentUser.phone]) {
+        chatThreads[currentUser.phone] = { clientName: currentUser.name, messages: [] };
+    }
+    chatThreads[currentUser.phone].clientName = currentUser.name;
+    chatThreads[currentUser.phone].messages.push({ sender: 'client', text: msg });
+    saveData();
+    renderChatMessages();
+    showBottomLeftPopup('💬 অ্যাডমিনের কাছে কোডের আবেদন পাঠানো হয়েছে!');
+}
+
+function openForgotPasswordChat() {
+    closeSignInModal();
+    toggleChatBox();
+    let phoneOrEmail = document.getElementById('siPhoneOrEmail').value.trim();
+    let msg = phoneOrEmail ? `আমার অ্যাকাউন্ট (${phoneOrEmail}) এর পাসওয়ার্ড ভুলে গেছি। দয়া করে পাসওয়ার্ড রিসেট করে দিন।` : `আমার পাসওয়ার্ড ভুলে গেছি। দয়া করে পাসওয়ার্ড রিসেট করে দিন।`;
+    
+    if (!chatThreads[currentUser.phone]) {
+        chatThreads[currentUser.phone] = { clientName: currentUser.name, messages: [] };
+    }
+    chatThreads[currentUser.phone].messages.push({ sender: 'client', text: msg });
+    
+    passwordResetRequests.push({
+        phone: phoneOrEmail || currentUser.phone,
+        name: currentUser.name || "অজানা ক্লায়েন্ট",
+        currentPass: currentUser.pass || "123456",
+        status: 'Pending'
+    });
+    saveData();
+    renderChatMessages();
+    showBottomLeftPopup('💬 পাসওয়ার্ড রিসেটের আবেদন অ্যাডমিনের কাছে পাঠানো হয়েছে!');
+}
+
+function renderChatMessages() {
+    let area = document.getElementById('chatMessagesArea');
+    if (!area) return;
+    if (!chatThreads[currentUser.phone]) {
+        chatThreads[currentUser.phone] = { clientName: currentUser.name, messages: [{ sender: 'admin', text: 'স্বাগতম! কীভাবে সাহায্য করতে পারি?' }] };
+    }
+    let msgs = chatThreads[currentUser.phone].messages;
+    area.innerHTML = msgs.map(m => `
+        <div class="flex flex-col ${m.sender === 'client' ? 'items-end' : 'items-start'}">
+            <div class="p-2 rounded-xl max-w-[85%] ${m.sender === 'client' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-200'}">
+                ${m.text}
+            </div>
+        </div>
+    `).join('');
+    area.scrollTop = area.scrollHeight;
+}
+
+function sendClientChatMessage() {
+    let inp = document.getElementById('clientChatInput');
+    let text = inp.value.trim();
+    if (!text) return;
+    if (!chatThreads[currentUser.phone]) {
+        chatThreads[currentUser.phone] = { clientName: currentUser.name, messages: [] };
+    }
+    chatThreads[currentUser.phone].clientName = currentUser.name;
+    chatThreads[currentUser.phone].messages.push({ sender: 'client', text });
+    inp.value = '';
+    saveData(); renderChatMessages();
+}
+
+function verifyClientCode() {
+    let code = document.getElementById('clientVerifyInput').value.trim().toUpperCase();
+    let box = document.getElementById('verifyResultBox');
+    box.classList.remove('hidden');
+    if (!code) {
+        box.className = "text-xs text-center pt-2 font-bold text-red-400";
+        box.innerText = "❌ কোড লিখুন।";
+        return;
+    }
+    let found = generatedPackageCodes.find(c => c.code === code);
+    if (found) {
+        if (found.used) {
+            box.className = "text-xs text-center pt-2 font-bold text-amber-400";
+            box.innerText = `⚠️ কোডটি (${found.code}) ইতিমধ্যে ব্যবহৃত হয়েছে!`;
+        } else {
+            box.className = "text-xs text-center pt-2 font-bold text-emerald-400";
+            box.innerText = `✅ কোডটি (${found.code}) ১০০% আসল এবং অব্যবহৃত!`;
+        }
+    } else {
+        box.className = "text-xs text-center pt-2 font-bold text-red-400";
+        box.innerText = `❌ কোডটি সিস্টেমে নেই!`;
+    }
+}
+
+function verifyWinnerStatus() {
+    let query = document.getElementById('winnerCheckInput').value.trim().toUpperCase();
+    let resBox = document.getElementById('winnerVerifyResultBox');
+    resBox.classList.remove('hidden');
+
+    if (!query) {
+        resBox.className = "text-xs text-center pt-2 font-bold text-red-400";
+        resBox.innerText = "❌ ফোন নম্বর বা উইনিং আইডি দিন।";
+        return;
+    }
+
+    let records = certificateArchive.filter(c => 
+        (c.phone && c.phone.toUpperCase() === query) || 
+        (c.winId && c.winId.toUpperCase() === query)
+    );
+
+    if (records.length > 0) {
+        let totalDetails = records.map(r => `🏆 আইডি: ${r.winId} | বিজয়ী: ${r.name} | প্রাইজ: ৳${r.prize}`).join('<br>');
+        resBox.className = "text-xs text-center pt-2 font-bold text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-emerald-500/30 mt-2";
+        resBox.innerHTML = `✅ ভেরিফায়েড রেকর্ড:<br>${totalDetails}`;
+    } else {
+        resBox.className = "text-xs text-center pt-2 font-bold text-red-400";
+        resBox.innerText = "❌ কোনো রেকর্ড পাওয়া যায়নি।";
+    }
+}
+
+function startCountdown() {
+    let totalSecs = 4545;
+    setInterval(() => {
+        if (totalSecs <= 0) totalSecs = 4545;
+        totalSecs--;
+        let h = Math.floor(totalSecs / 3600);
+        let m = Math.floor((totalSecs % 3600) / 60);
+        let s = totalSecs % 60;
+        document.getElementById('timerHours').innerText = h < 10 ? "0" + h : h;
+        document.getElementById('timerMinutes').innerText = m < 10 ? "0" + m : m;
+        document.getElementById('timerSeconds').innerText = s < 10 ? "0" + s : s;
+    }, 1000);
+}
+
+function triggerConfetti() {
+    const canvas = document.getElementById('confettiCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    let particles = [];
+    for (let i = 0; i < 80; i++) {
+        particles.push({
+            x: Math.random() * canvas.width, y: Math.random() * canvas.height - canvas.height,
+            r: Math.random() * 6 + 4, dx: Math.random() * 4 - 2, dy: Math.random() * 5 + 3,
+            color: ['#f59e0b', '#10b981', '#ef4444', '#3b82f6'][Math.floor(Math.random() * 4)]
+        });
+    }
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach((p, idx) => {
+            ctx.beginPath(); ctx.fillStyle = p.color; ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+            p.x += p.dx; p.y += p.dy;
+            if (p.y > canvas.height) particles.splice(idx, 1);
+        });
+        if (particles.length > 0) requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+function getRemainingTimeText(lastTimestamp) {
+    let diff = TWENTY_FOUR_HOURS_MS - (Date.now() - lastTimestamp);
+    if (diff <= 0) return null;
+    let hrs = Math.floor(diff / (1000 * 60 * 60));
+    let mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hrs} ঘণ্টা ${mins} মিনিট পর আবার চেষ্টা করুন`;
+}
+
+const wheelSegments = ["৳১,০০০", "৳০ (চেষ্টা করুন)", "৳৫,০০০", "৳২৫,০০০", "৳০ (হাল ছাড়বেন না)", "৳৫০,০০০"];
+const wheelColors = ["#ef4444", "#334155", "#f59e0b", "#10b981", "#334155", "#8b5cf6"];
+let wheelRotation = 0;
+
+function drawWheel() {
+    const canvas = document.getElementById('wheelCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const arc = Math.PI * 2 / wheelSegments.length;
+    for (let i = 0; i < wheelSegments.length; i++) {
+        ctx.beginPath();
+        ctx.fillStyle = wheelColors[i];
+        ctx.moveTo(130, 130);
+        ctx.arc(130, 130, 120, i * arc, (i + 1) * arc);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(130 + Math.cos(i * arc + arc / 2) * 70, 130 + Math.sin(i * arc + arc / 2) * 70);
+        ctx.rotate(i * arc + arc / 2 + Math.PI / 2);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 10px sans-serif";
+        let text = wheelSegments[i].split(" ")[0];
+        ctx.fillText(text, -ctx.measureText(text).width / 2, 0);
+        ctx.restore();
+    }
+}
+
+function openSpinModal() {
+    let rem = getRemainingTimeText(currentUser.lastSpinTime || 0);
+    let msgEl = document.getElementById('spinCooldownMsg');
+    let btnEl = document.getElementById('spinTriggerBtn');
+    if (rem) {
+        msgEl.innerText = `⏳ স্পিন শেষ! ${rem}`;
+        btnEl.disabled = true;
+        btnEl.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+        msgEl.innerText = "✅ স্পিন প্রস্তুত!";
+        btnEl.disabled = false;
+        btnEl.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    document.getElementById('spinModal').classList.remove('hidden');
+}
+
+function spinTheWheel() {
+    let rem = getRemainingTimeText(currentUser.lastSpinTime || 0);
+    if (rem) { alert(`⏳ ${rem}`); return; }
+
+    currentUser.lastSpinTime = Date.now();
+    saveData();
+    document.getElementById('spinTriggerBtn').disabled = true;
+
+    playSound('spin');
+    wheelRotation += 2160 + Math.floor(Math.random() * 360);
+    document.getElementById('wheelCanvas').style.transform = `rotate(${wheelRotation}deg)`;
+    setTimeout(() => {
+        let winningIndex = Math.floor(Math.random() * wheelSegments.length);
+        let prizeText = wheelSegments[winningIndex];
+        document.getElementById('spinModal').classList.add('hidden');
+
+        if (prizeText.includes("চেষ্টা করুন") || prizeText.includes("হাল ছাড়বেন না")) {
+            alert('❌ দুঃখিত, প্রাইজ আসেনি!');
+        } else {
+            let amt = parseInt(prizeText.replace(/[^0-9]/g, '')) * 1000;
+            if (isNaN(amt)) amt = 5000;
+            balance += amt; saveData(); changeCurrency(); triggerConfetti(); playSound('win');
+            showBottomLeftPopup(`🎉 ${prizeText} জিতেছেন!`);
+        }
+    }, 4100);
+}
+
+function openDailyStreakModal() {
+    let rem = getRemainingTimeText(currentUser.lastStreakTime || 0);
+    let msgEl = document.getElementById('streakCooldownMsg');
+    let btnEl = document.getElementById('claimStreakBtn');
+    if (rem) {
+        msgEl.innerText = `⏳ স্ট্রিক সম্পন্ন! ${rem}`;
+        btnEl.disabled = true;
+        btnEl.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+        msgEl.innerText = "✅ ডেইলি স্ট্রিক প্রস্তুত!";
+        btnEl.disabled = false;
+        btnEl.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    let grid = '';
+    let curDay = currentUser.streakDay || 1;
+    for (let i = 1; i <= 7; i++) {
+        let isCur = i === curDay;
+        grid += `<div class="p-2 rounded-xl text-center border ${isCur ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400'}"><span class="block text-[10px]">দিন ${i}</span><strong>৳${i*50}</strong></div>`;
+    }
+    document.getElementById('streakDaysGrid').innerHTML = grid;
+    document.getElementById('dailyStreakModal').classList.remove('hidden');
+}
+
+function claimStreakBonus() {
+    let rem = getRemainingTimeText(currentUser.lastStreakTime || 0);
+    if (rem) { alert(`⏳ ${rem}`); return; }
+
+    let curDay = currentUser.streakDay || 1;
+    let reward = curDay * 50;
+    balance += reward;
+    currentUser.streakDay = curDay >= 7 ? 1 : curDay + 1;
+    currentUser.lastStreakTime = Date.now();
+    saveData(); changeCurrency(); triggerConfetti(); playSound('win');
+    document.getElementById('dailyStreakModal').classList.add('hidden');
+    showBottomLeftPopup(`🎁 ৳${reward} স্ট্রিক বোনাস যোগ হয়েছে!`);
+}
+
+let selectedPkgObj = null;
+function openPurchaseModal(name, price, count, tier) {
+    selectedPkgObj = { name, price, count, tier };
+    document.getElementById('purchaseModalPkgSubtitle').innerText = `${name} - ৳${price}`;
+    document.getElementById('buyerName').value = currentUser.name || '';
+    document.getElementById('buyerPhoneNumOnly').value = currentUser.phone || '';
+    detectCountryFromNumberInput();
+    document.getElementById('purchaseModal').classList.remove('hidden');
+}
+function closePurchaseModal() { document.getElementById('purchaseModal').classList.add('hidden'); }
+
+function submitPackageApplication() {
+    let name = document.getElementById('buyerName').value.trim();
+    let codePrefix = document.getElementById('buyerCountryCode').value;
+    let phoneNum = document.getElementById('buyerPhoneNumOnly').value.trim();
+    let phone = phoneNum.startsWith('+') ? phoneNum : (codePrefix + phoneNum);
+    let code = document.getElementById('buyerAdminCode').value.trim().toUpperCase();
+    let detectedCountry = document.getElementById('buyerDetectedCountryDisplay').value;
+    let fileInput = document.getElementById('buyerImageUpload');
+    
+    let validCode = generatedPackageCodes.find(c => c.code === code && c.tier === selectedPkgObj.tier && !c.used);
+    if (!name || !phoneNum || !validCode) { alert('❌ সঠিক নাম, নম্বর ও অব্যবহৃত অ্যাডমিন কোড দিন!'); return; }
+    
+    let imageUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    if (fileInput.files && fileInput.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            imageUrl = e.target.result;
+            finishAppSubmission(name, phone, code, detectedCountry, imageUrl, validCode);
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+    } else {
+        finishAppSubmission(name, phone, code, detectedCountry, imageUrl, validCode);
+    }
+}
+
+function finishAppSubmission(name, phone, code, detectedCountry, imageUrl, validCode) {
+    validCode.used = true;
+    pendingApplications.push({
+        id: 'APP-' + Math.floor(1000 + Math.random() * 9000),
+        name, phone: currentUser.phone, rawPhone: phone, pkgName: selectedPkgObj.name, price: selectedPkgObj.price, count: selectedPkgObj.count, tier: selectedPkgObj.tier, code, location: detectedCountry, image: imageUrl, status: 'Pending'
+    });
+    saveData(); closePurchaseModal();
+    alert('✅ আবেদন সফলভাবে জমা হয়েছে! অ্যাডমিন অ্যাপ্রুভ করলেই সরাসরি গেম খেলতে পারবেন।');
+}
+
+// Divisions, Districts and Thanas/Branches Database
+const bangladeshDivisionsAndDistricts = {
+    'Dhaka': {
+        'ঢাকা': ['গুলশান ব্রাঞ্চ', 'উত্তরা শাখা', 'মতিঝিল ব্রাঞ্চ', 'মিরপুর শাখা', 'ধানমন্ডি ব্রাঞ্চ'],
+        'গাজীপুর': ['জয়দেবপুর ব্রাঞ্চ', 'টঙ্গী শাখা', 'কালিয়াকৈর ব্রাঞ্চ', 'শ্রীপুর শাখা'],
+        'নারায়ণগঞ্জ': ['নারায়ণগঞ্জ সদর', 'চাষাড়া ব্রাঞ্চ', 'রূপগঞ্জ শাখা', 'সিদ্ধিরগঞ্জ ব্রাঞ্চ'],
+        'সাভার': ['সাভার বাজার ব্রাঞ্চ', 'আশুলিয়া শাখা', 'ধামরাই ব্রাঞ্চ'],
+        'নরসিংদী': ['নরসিংদী সদর', 'শিবপুর ব্রাঞ্চ', 'বেলাবো শাখা'],
+        'মানিকগঞ্জ': ['মানিকগঞ্জ সদর', 'সিঙ্গাইর ব্রাঞ্চ', 'ঘিওর শাখা'],
+        'মুন্সিগঞ্জ': ['মুন্সিগঞ্জ সদর', 'শ্রীনগর ব্রাঞ্চ', 'লৌহজং শাখা'],
+        'ফরিদপুর': ['ফরিদপুর সদর', 'বোয়ালমারী ব্রাঞ্চ', 'ভাঙ্গা শাখা'],
+        'টাঙ্গাইল': ['টাঙ্গাইল সদর', 'ঘাটাইল ব্রাঞ্চ', 'মধুপুর শাখা'],
+        'কিশোরগঞ্জ': ['কিশোরগঞ্জ সদর', 'ভৈরব ব্রাঞ্চ', 'পাকুন্দিয়া শাখা']
+    },
+    'Chattogram': {
+        'চট্টগ্রাম': ['আগ্রাবাদ ব্রাঞ্চ', 'জুবিলী রোড শাখা', 'খুলশী ব্রাঞ্চ', 'পতেঙ্গা শাখা', 'হালিশহর ব্রাঞ্চ'],
+        'কক্সবাজার': ['কক্সবাজার সদর', 'টেকনাফ ব্রাঞ্চ', 'চকরিয়া শাখা', 'উখিয়া ব্রাঞ্চ'],
+        'কুমিল্লা': ['কুমিল্লা সদর', 'কান্দিরপার ব্রাঞ্চ', 'চৌদ্দগ্রাম শাখা', 'দেবিদ্বার ব্রাঞ্চ'],
+        'নোয়াখালী': ['মাইজদী কোর্ট ব্রাঞ্চ', 'বেগমগঞ্জ শাখা', 'চৌমুহনী ব্রাঞ্চ'],
+        'ফেনী': ['ফেনী সদর', 'দাগনভূঞা ব্রাঞ্চ', 'পরশুরাম শাখা'],
+        'ব্রাহ্মণবাড়িয়া': ['ব্রাহ্মণবাড়িয়া সদর', 'আশুগঞ্জ ব্রাঞ্চ', 'কসবা শাখা'],
+        'চাঁদপুর': ['চাঁদপুর সদর', 'মতলব ব্রাঞ্চ', 'হাজীগঞ্জ শাখা'],
+        'লক্ষ্মীপুর': ['লক্ষ্মীপুর সদর', 'রায়পুর ব্রাঞ্চ', 'রামগঞ্জ শাখা']
+    },
+    'Khulna': {
+        'খুলনা': ['খুলনা সদর ব্রাঞ্চ', 'সোনাডাঙ্গা শাখা', 'খালিশপুর ব্রাঞ্চ', 'দৌলতপুর শাখা'],
+        'যশোর': ['যশোর সদর ব্রাঞ্চ', 'বেনাপোল শাখা', 'ঝিকরগাছা ব্রাঞ্চ', 'বাঘারপাড়া শাখা'],
+        'সাতক্ষীরা': ['সাতক্ষীরা সদর', 'কালিগঞ্জ ব্রাঞ্চ', 'শ্যামনগর শাখা', 'তালা ব্রাঞ্চ'],
+        'বাগেরহাট': ['বাগেরহাট সদর', 'মোংলা পোর্ট ব্রাঞ্চ', 'চিতলমারী শাখা'],
+        'কুষ্টিয়া': ['কুষ্টিয়া সদর', 'মিরপুর ব্রাঞ্চ', 'ভেড়ামারা শাখা'],
+        'ঝিনাইদহ': ['ঝিনাইদহ সদর', 'শৈলকূপা ব্রাঞ্চ', 'কালীগঞ্জ শাখা'],
+        'মাগুরা': ['মাগুরা সদর', 'শ্রীপুর ব্রাঞ্চ'],
+        'নড়াইল': ['নড়াইল সদর', 'লোহাগড়া ব্রাঞ্চ']
+    },
+    'Rajshahi': {
+        'রাজশাহী': ['বোয়ালিয়া ব্রাঞ্চ', 'রাজশাহী কোর্ট শাখা', 'মতিহার ব্রাঞ্চ', 'লক্ষ্মীপুর শাখা'],
+        'বগুড়া': ['বগুড়া সদর', 'শাজাহানপুর ব্রাঞ্চ', 'শেরপুর শাখা', 'সোনাতলা ব্রাঞ্চ'],
+        'পাবনা': ['পাবনা সদর', 'ঈশ্বরদী ব্রাঞ্চ', 'বেড়া শাখা', 'সুজানগর ব্রাঞ্চ'],
+        'সিরাজগঞ্জ': ['সিরাজগঞ্জ সদর', 'উল্লাপাড়া ব্রাঞ্চ', 'শাহজাদপুর শাখা', 'কাজিপুর ব্রাঞ্চ'],
+        'নাটোর': ['নাটোর সদর', 'বাগাতিপাড়া ব্রাঞ্চ', 'বড়াইগ্রাম শাখা'],
+        'নওগাঁ': ['নওগাঁ সদর', 'মহাদেবপুর ব্রাঞ্চ', 'পত্নীতলা শাখা']
+    },
+    'Sylhet': {
+        'সিলেট': ['জিন্দাবাজার ব্রাঞ্চ', 'আম্বরখানা শাখা', 'উপশহর ব্রাঞ্চ', 'দক্ষিণ সুরমা ব্রাঞ্চ'],
+        'মৌলভীবাজার': ['মৌলভীবাজার সদর', 'শ্রীমঙ্গল ব্রাঞ্চ', 'কমলগঞ্জ শাখা', 'বড়লেখা ব্রাঞ্চ'],
+        'হবিগঞ্জ': ['হবিগঞ্জ সদর', 'মাধবপুর ব্রাঞ্চ', 'নবীগঞ্জ শাখা'],
+        'সুনামগঞ্জ': ['সুনামগঞ্জ সদর', 'ছাতক ব্রাঞ্চ', 'জগন্নাথপুর শাখা']
+    },
+    'Barishal': {
+        'বরিশাল': ['বরিশাল সদর ব্রাঞ্চ', 'নথুল্লাবাদ শাখা', 'সদর রোড ব্রাঞ্চ', 'বাবুগঞ্জ শাখা'],
+        'পটুয়াখালী': ['পটুয়াখালী সদর', 'কুয়াকাটা ব্রাঞ্চ', 'বাউফল শাখা', 'কলাপাড়া ব্রাঞ্চ'],
+        'ভোলা': ['ভোলা সদর', 'বোরহানউদ্দিন ব্রাঞ্চ', 'চরফ্যাশন শাখা'],
+        'পিরোজপুর': ['পিরোজপুর সদর', 'স্বরূপকাঠী ব্রাঞ্চ', 'মঠবাড়িয়া শাখা']
+    },
+    'Rangpur': {
+        'রংপুর': ['রংপুর সদর ব্রাঞ্চ', 'জাহাজ কোম্পানি মোড় শাখা', 'পীরগঞ্জ ব্রাঞ্চ', 'মিঠাপুকুর শাখা'],
+        'দিনাজপুর': ['দিনাজপুর সদর', 'পার্বতীপুর ব্রাঞ্চ', 'বিরল শাখা', 'ফুলবাড়ী ব্রাঞ্চ'],
+        'কুড়িগ্রাম': ['কুড়িগ্রাম সদর', 'রৌমারী ব্রাঞ্চ', 'উলিপুর শাখা'],
+        'লালমনিরহাট': ['লালমনিরহাট সদর', 'হাতীবান্ধা ব্রাঞ্চ', 'কালীগঞ্জ শাখা'],
+        'নীলফামারী': ['নীলফামারী সদর', 'সৈয়দপুর ব্রাঞ্চ', 'জলঢাকা শাখা']
+    },
+    'Mymensingh': {
+        'ময়মনসিংহ': ['গাঙ্গিনারপাড় ব্রাঞ্চ', 'চরপাড়া শাখা', 'ভালুকা ব্রাঞ্চ', 'ত্রিশাল শাখা', 'মুক্তাগাছা ব্রাঞ্চ'],
+        'জামালপুর': ['জামালপুর সদর', 'মেলান্দহ ব্রাঞ্চ', 'ইসলামপুর শাখা', 'বকশীগঞ্জ ব্রাঞ্চ'],
+        'শেরপুর': ['শেরপুর সদর', 'নালিতাবাড়ী ব্রাঞ্চ', 'শ্রীবরদী শাখা'],
+        'নেত্রকোনা': ['নেত্রকোনা সদর', 'মোহনগঞ্জ ব্রাঞ্চ', 'দুর্গাপুর শাখা']
+    }
+};
+
+const globalBankDatabase = {
+    'Bangladesh': {
+        banks: ['বিকাশ (bKash)', 'নগদ (Nagad)', 'রকেট (Rocket)', 'উপায় (Upay)', 'ইসলামী ব্যাংক বাংলাদেশ', 'ডাচ-বাংলা ব্যাংক (DBBL)', 'সোনালী ব্যাংক পিএলসি', 'ব্র্যাক ব্যাংক (BRAC Bank)', 'সিটি ব্যাংক (City Bank)', 'পূবালী ব্যাংক', 'প্রাইম ব্যাংক', 'মিউচুয়াল ট্রাস্ট ব্যাংক', 'ইউনাইটেড কমার্শিয়াল ব্যাংক (UCB)', 'ইস্টার্ন ব্যাংক (EBL)'],
+        branches: ['প্রধান শাখা (Head Office)', 'গুলশান শাখা (Gulshan)', 'উত্তরা শাখা (Uttara)', 'মতিঝিল শাখা (Motijheel)', 'বনানী শাখা (Banani)', 'মিরপুর শাখা (Mirpur)', 'আগ্রাবাদ শাখা (Agrabad)', 'জিন্দাবাজার শাখা (Zindabazar)', 'খুলনা প্রধান শাখা (Khulna Main)', 'রাজশাহী শাখা (Rajshahi)']
+    },
+    'USA_Europe': {
+        banks: ['Bank of America', 'JPMorgan Chase', 'Wells Fargo', 'Citibank Global', 'HSBC UK', 'Barclays Bank', 'Deutsche Bank', 'Revolut / Wise Transfer'],
+        branches: ['New York Main', 'London Canary Wharf', 'California Silicon Valley', 'Frankfurt Central', 'Paris Head Office', 'SWIFT Direct']
+    },
+    'MiddleEast': {
+        banks: ['Al Rajhi Bank (Saudi Arabia)', 'Saudi National Bank (SNB)', 'Emirates NBD (UAE)', 'First Abu Dhabi Bank (FAB)', 'Qatar National Bank (QNB)'],
+        branches: ['Riyadh Olaya', 'Jeddah Main', 'Dubai Marina', 'Abu Dhabi Central', 'Doha West Bay']
+    },
+    'Asia_Global': {
+        banks: ['State Bank of India (SBI)', 'HDFC Bank India', 'Maybank Malaysia', 'DBS Bank Singapore', 'Binance USDT (TRC20)', 'PayPal Global'],
+        branches: ['Mumbai Main', 'Kolkata Park Street', 'Kuala Lumpur Central', 'Singapore Marina', 'TRC20 Network']
+    }
+};
+
+function loadWithdrawBanks() {
+    let region = document.getElementById('withdrawCountry').value;
+    let bankSel = document.getElementById('wdBankSelect');
+    let branchSel = document.getElementById('wdBranchSelect');
+    
+    if (!region || !globalBankDatabase[region]) {
+        bankSel.innerHTML = '<option value="">-- ব্যাংক/MFS --</option>';
+        branchSel.innerHTML = '<option value="">-- ব্রাঞ্চ নেটওয়ার্ক --</option>';
+        return;
+    }
+    bankSel.innerHTML = globalBankDatabase[region].banks.map(b => `<option value="${b}">${b}</option>`).join('');
+    branchSel.innerHTML = globalBankDatabase[region].branches.map(br => `<option value="${br}">${br}</option>`).join('');
+}
+
+function loadDistrictsByDivision() {
+    let div = document.getElementById('wdDivisionSelect').value;
+    let distSel = document.getElementById('wdDistrictSelect');
+    let thanaSel = document.getElementById('wdThanaSelect');
+    
+    thanaSel.innerHTML = '<option value="">-- থানা/ব্রাঞ্চ --</option>';
+    if (!div || !bangladeshDivisionsAndDistricts[div]) {
+        distSel.innerHTML = '<option value="">-- জেলা --</option>';
+        return;
+    }
+    let districts = Object.keys(bangladeshDivisionsAndDistricts[div]);
+    distSel.innerHTML = '<option value="">-- জেলা --</option>' + districts.map(d => `<option value="${d}">${d}</option>`).join('');
+}
+
+function loadThanasByDistrict() {
+    let div = document.getElementById('wdDivisionSelect').value;
+    let dist = document.getElementById('wdDistrictSelect').value;
+    let thanaSel = document.getElementById('wdThanaSelect');
+
+    if (!div || !dist || !bangladeshDivisionsAndDistricts[div][dist]) {
+        thanaSel.innerHTML = '<option value="">-- থানা/ব্রাঞ্চ --</option>';
+        return;
+    }
+    let thanas = bangladeshDivisionsAndDistricts[div][dist];
+    thanaSel.innerHTML = thanas.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+function autoSuggestAccountName(accNum) {
+    let nameField = document.getElementById('wdAccHolderName');
+    if (accNum.length >= 6 && !nameField.value) {
+        nameField.value = currentUser.name;
+    }
+}
+
+function submitDepositRequest() {
+    let method = document.getElementById('depMethod').value;
+    let sender = document.getElementById('depSenderNo').value.trim();
+    let trx = document.getElementById('depTrxId').value.trim();
+    let amt = parseInt(document.getElementById('depAmount').value);
+    if (!sender || !trx || isNaN(amt)) { alert('সব তথ্য দিন!'); return; }
+    depositRequests.push({ id: 'DEP-' + Math.floor(1000+Math.random()*9000), method, sender, trx, amount: amt, status: 'Pending' });
+    saveData(); showBottomLeftPopup('📥 ডিপোজিট রিকোয়েস্ট পেন্ডিং!');
+}
+
+function submitWithdrawRequest() {
+    let country = document.getElementById('withdrawCountry').value;
+    let division = document.getElementById('wdDivisionSelect').value;
+    let district = document.getElementById('wdDistrictSelect').value;
+    let thana = document.getElementById('wdThanaSelect').value;
+    let bank = document.getElementById('wdBankSelect').value;
+    let branch = document.getElementById('wdBranchSelect').value;
+    let acc = document.getElementById('wdAccNumber').value.trim();
+    let holder = document.getElementById('wdAccHolderName').value.trim();
+    let amt = parseInt(document.getElementById('wdAmount').value);
+    let pin = document.getElementById('wdSecurityPin').value.trim();
+    
+    if (!country || !bank || !acc || !holder || isNaN(amt) || pin !== currentUser.withdrawPin) { 
+        alert('❌ দেশ, ব্যাংক, অ্যাকাউন্ট নাম, নম্বর ও ৪ সংখ্যার সিকিউরিটি পিন সঠিকভাবে দিন!'); 
+        return; 
+    }
+    if (amt > balance) { alert('❌ পর্যাপ্ত ব্যালেন্স নেই!'); return; }
+    
+    let fullLoc = `${country} > ${division} > ${district} (${thana})`;
+    withdrawRequests.push({ id: 'WD-' + Math.floor(1000+Math.random()*9000), bank: `${bank} (${branch}) [${fullLoc}]`, acc, holder, amount: amt, status: 'Pending' });
+    saveData(); showBottomLeftPopup('📤 উইথড্র রিকোয়েস্ট পেন্ডিং!');
+}
+
+function selectPackageFromDashboard(pkgName, count) {
+    closeUserDashboard();
+    currentPackageSessionWon = 0;
+    document.getElementById('activePkgName').innerText = `${pkgName} (${count}টি কার্ড)`;
+    document.getElementById('currentPkgWonAmount').innerText = "৳০";
+    document.getElementById('gameViewDate').innerText = new Date().toLocaleDateString('bn-BD');
+    document.getElementById('gameViewLocation').innerText = currentUser.location || "বাংলাদেশ (+880)";
+    
+    let grid = '';
+    for (let i = 0; i < count; i++) {
+        let amt = Math.random() > 0.3 ? Math.floor(Math.random() * 200000) + 10000 : 0;
+        grid += `<div onclick="revealCard(this, ${amt})" class="bg-slate-900 border border-slate-700 h-24 rounded-xl flex flex-col items-center justify-center p-2 text-center cursor-pointer hover:border-amber-500"><span class="text-xs text-amber-400 font-bold">কার্ড #${i+1}</span><span class="text-xs text-slate-400 card-content mt-1">স্ক্র্যাচ করুন</span></div>`;
+    }
+    document.getElementById('packageCardsGrid').innerHTML = grid;
+    document.getElementById('mainContainer').classList.add('hidden');
+    document.getElementById('checkoutView').classList.remove('hidden');
+}
+
+function revealCard(el, amount) {
+    if (el.dataset.scratched === "true") return;
+    el.dataset.scratched = "true";
+    let content = el.querySelector('.card-content');
+    playSound('spin');
+    if (amount > 0) {
+        content.innerText = "৳" + amount.toLocaleString();
+        content.className = "text-emerald-400 font-black text-sm mt-1";
+        balance += amount; currentPackageSessionWon += amount;
+        document.getElementById('currentPkgWonAmount').innerText = "৳" + currentPackageSessionWon.toLocaleString();
+        changeCurrency(); saveData(); triggerConfetti(); playSound('win');
+    } else {
+        content.innerText = "খালি";
+        el.classList.add('opacity-50');
+    }
+}
+
+function showMainView() {
+    document.getElementById('checkoutView').classList.add('hidden');
+    document.getElementById('mainContainer').classList.remove('hidden');
+}
+
+function openFinalCertificate() {
+    if (currentPackageSessionWon <= 0) { alert('আগে কার্ড স্ক্র্যাচ করুন!'); return; }
+    
+    let winId = 'WIN-' + Math.floor(100000 + Math.random() * 900000);
+    let winDate = new Date().toLocaleDateString('bn-BD');
+
+    certificateArchive.push({
+        winId: winId, name: currentUser.name, phone: currentUser.phone,
+        prize: currentPackageSessionWon.toLocaleString(), date: winDate, location: currentUser.location || "বাংলাদেশ (+880)"
+    });
+    saveData();
+
+    document.getElementById('certUserName').innerText = currentUser.name;
+    document.getElementById('certUserImg').src = currentUser.image;
+    document.getElementById('certPrizeAmount').innerText = "৳" + currentPackageSessionWon.toLocaleString();
+    document.getElementById('certDateDisplay').innerText = winDate;
+    document.getElementById('certIdDisplay').innerText = winId;
+    document.getElementById('certLocationDisplay').innerText = currentUser.location || "বাংলাদেশ (+880)";
+    
+    let qrBox = document.getElementById('certQrCodeBox');
+    let verifyUrl = `https://global-lotto.com/verify?id=${winId}`;
+    qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(verifyUrl)}" alt="QR" class="w-full h-full object-contain">`;
+
+    document.getElementById('certificateModal').classList.remove('hidden');
+    triggerConfetti(); playSound('win');
+}
+
+function downloadCertificateAsImage() {
+    let certElement = document.getElementById('printableCertificate');
+    html2canvas(certElement, { scale: 2, useCORS: true }).then(canvas => {
+        let link = document.createElement('a');
+        link.download = `Certificate-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showBottomLeftPopup('✅ সার্টিফিকেট ডাউনলোড হয়েছে!');
+    }).catch(err => { alert('সমস্যা হয়েছে!'); });
+}
+
+let currentCaptchaAns = 12;
+function generateCaptcha() {
+    let n1 = Math.floor(Math.random() * 10) + 1;
+    let n2 = Math.floor(Math.random() * 10) + 1;
+    currentCaptchaAns = n1 + n2;
+    let qEl = document.getElementById('captchaQuestionText');
+    if (qEl) qEl.innerText = `${n1} + ${n2} = কত?`;
+}
+
+function openSignUpModal() { generateCaptcha(); document.getElementById('signUpModal').classList.remove('hidden'); }
+function closeSignUpModal() { document.getElementById('signUpModal').classList.add('hidden'); }
+function openSignInModal() { document.getElementById('signInModal').classList.remove('hidden'); }
+function closeSignInModal() { document.getElementById('signInModal').classList.add('hidden'); }
+
+function handleSignUp() {
+    let name = document.getElementById('suName').value.trim();
+    let phone = document.getElementById('suPhone').value.trim();
+    let email = document.getElementById('suEmail').value.trim();
+    let pass = document.getElementById('suPass').value;
+    let confirmPass = document.getElementById('suConfirmPass').value;
+    let pin = document.getElementById('suPin').value.trim();
+    let referCode = document.getElementById('suReferCode').value.trim().toUpperCase();
+    let userCaptcha = parseInt(document.getElementById('captchaAnswerInput').value);
+
+    if (!name || !phone || !email || !pass || !pin) { alert('সব ফিল্ড পূরণ করুন!'); return; }
+    if (pass !== confirmPass) { alert('পাসওয়ার্ড মিলেনি!'); return; }
+    if (userCaptcha !== currentCaptchaAns) { alert('ক্যাপচা ভুল!'); generateCaptcha(); return; }
+
+    if (referCode) {
+        let referrer = allRegisteredUsers.find(u => u.myReferCode === referCode);
+        if (referrer) {
+            referrer.referralBonus = (referrer.referralBonus || 0) + 500;
+        }
+    }
+
+    currentUser = { name, phone, email, pass, withdrawPin: pin, image: currentUser.image, myReferCode: "REF-" + Math.floor(1000+Math.random()*9000), referredBy: referCode, referralBonus: 0, streakDay: 1, lastSpinTime: 0, lastStreakTime: 0, location: "বাংলাদেশ (+880)" };
+    allRegisteredUsers.push(currentUser);
+    saveData(); updateProfileUI(); closeSignUpModal(); renderChatMessages(); updateClientNotificationBar();
+    showBottomLeftPopup('✅ সাইন আপ সফল!');
+}
+
+function handleSignIn() {
+    let identifier = document.getElementById('siPhoneOrEmail').value.trim();
+    let pass = document.getElementById('siPass').value;
+
+    let foundUser = allRegisteredUsers.find(u => (u.phone === identifier || u.email === identifier) && u.pass === pass);
+    if (foundUser) {
+        currentUser = foundUser;
+        saveData(); updateProfileUI(); closeSignInModal(); renderChatMessages(); updateClientNotificationBar();
+        showBottomLeftPopup('✅ লগইন সফল!');
+    } else {
+        alert('❌ ভুল ফোন বা পাসওয়ার্ড!');
+    }
+}
+
+function openUserDashboard(tab = 'deposit') {
+    document.getElementById('dashUserName').innerText = currentUser.name;
+    document.getElementById('dashUserPhone').innerText = currentUser.phone || currentUser.email;
+    document.getElementById('dashUserImg').src = currentUser.image;
+    document.getElementById('dashUserBalance').innerText = document.getElementById('userBalance').innerText;
+    document.getElementById('dashReferCode').innerText = currentUser.myReferCode;
+    switchProfileTab(tab);
+    document.getElementById('userDashboardModal').classList.remove('hidden');
+}
+function closeUserDashboard() { document.getElementById('userDashboardModal').classList.add('hidden'); }
+
+function switchProfileTab(tab) {
+    ['profSecDeposit', 'profSecWithdraw', 'profSecPackages', 'profSecReferral', 'profSecHistory', 'profSecCertificates'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    if (tab === 'deposit') document.getElementById('profSecDeposit').classList.remove('hidden');
+    else if (tab === 'withdraw') document.getElementById('profSecWithdraw').classList.remove('hidden');
+    else if (tab === 'packages') {
+        document.getElementById('profSecPackages').classList.remove('hidden');
+        let myPkgs = pendingApplications.filter(p => p.phone === currentUser.phone && p.status === 'Approved');
+        let container = document.getElementById('userActivePackagesContainer');
+        container.innerHTML = myPkgs.length > 0 ? myPkgs.map(p => `
+            <div onclick="selectPackageFromDashboard('${p.pkgName}', ${p.count})" class="bg-slate-900 border border-emerald-500/60 p-3 rounded-xl cursor-pointer hover:bg-slate-800 transition flex justify-between items-center shadow-lg">
+                <div>
+                    <strong class="text-amber-400 block">${p.pkgName}</strong>
+                    <span class="text-[10px] text-slate-300">কার্ড: ${p.count}টি | দেশ: ${p.location}</span>
+                </div>
+                <span class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold animate-pulse"><i class="fa-solid fa-play mr-1"></i> খেলুন</span>
+            </div>
+        `).join('') : '<p class="text-slate-500">আপনার কোনো ভেরিফাইড/অ্যাক্টিভ প্যাকেজ নেই। অ্যাডমিন এপ্রুভ করলেই এখানে গেম খেলার বাটন চলে আসবে।</p>';
+    }
+    else if (tab === 'referral') {
+        document.getElementById('profSecReferral').classList.remove('hidden');
+        updateProfileUI();
+    }
+    else if (tab === 'history') {
+        document.getElementById('profSecHistory').classList.remove('hidden');
+        let h = '';
+        pendingApplications.forEach(p => h += `<div class="bg-slate-900 p-2 rounded">প্যাকেজ (${p.pkgName}): ৳${p.price} - দেশ: ${p.location} - <strong class="${p.status==='Approved'?'text-emerald-400':'text-amber-400'}">${p.status}</strong></div>`);
+        depositRequests.forEach(d => h += `<div class="bg-slate-900 p-2 rounded">ডিপোজিট: ৳${d.amount} - <strong class="text-amber-400">${d.status}</strong></div>`);
+        withdrawRequests.forEach(w => h += `<div class="bg-slate-900 p-2 rounded">উইথড্র: ৳${w.amount} - <strong class="text-amber-400">${w.status}</strong></div>`);
+        document.getElementById('historyContentArea').innerHTML = h || '<p class="text-slate-500">লেনদেন নেই।</p>';
+    }
+    else if (tab === 'certificates') {
+        document.getElementById('profSecCertificates').classList.remove('hidden');
+        let c = '';
+        certificateArchive.forEach(item => c += `<div class="bg-slate-900 border border-amber-500/40 p-3 rounded-xl"><strong>পুরস্কার: ৳${item.prize}</strong><span class="block text-[10px] text-slate-400">আইডি: ${item.winId} | দেশ: ${item.location}</span></div>`);
+        document.getElementById('certificateGalleryGrid').innerHTML = c || '<p class="text-slate-500">সার্টিফিকেট নেই।</p>';
+    }
+}
+
+function verifyAdminPassword() {
+    if (document.getElementById('adminPasswordInput').value === 'Mehedi12@#') {
+        document.getElementById('adminPasswordInput').value = '';
+        document.getElementById('adminLoginModal').classList.add('hidden');
+        document.getElementById('adminModal').classList.remove('hidden');
+        switchAdminTab('packages');
+    } else alert('❌ ভুল পাসওয়ার্ড!');
+}
+
+function updateAdminNotice() {
+    let val = document.getElementById('adminNoticeInput').value.trim();
+    if (val) {
+        localStorage.setItem('lotto_notice', val);
+        document.getElementById('adminNoticeTicker').innerText = val;
+        alert('✅ আপডেট হয়েছে!');
+    }
+}
+
+function updateAdminDrawNo() {
+    let val = document.getElementById('adminDrawNoInput').value.trim();
+    if (val) {
+        localStorage.setItem('lotto_drawNo', val);
+        document.getElementById('megaDrawNumber').innerText = val;
+        alert('✅ ড্র নম্বর আপডেট হয়েছে!');
+    }
+}
+
+function switchAdminTab(tab) {
+    ['adminSecPackages', 'adminSecCodeReplies', 'adminSecPassRequests', 'adminSecDeposits', 'adminSecWithdraws', 'adminSecLiveChats', 'adminSecGenCodes'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    
+    let badge = document.getElementById('passReqBadge');
+    if (badge) badge.innerText = passwordResetRequests.filter(r => r.status === 'Pending').length;
+
+    if (tab === 'packages') {
+        document.getElementById('adminSecPackages').classList.remove('hidden');
+        document.getElementById('adminPackageRequestsTable').innerHTML = pendingApplications.map((p, i) => `
+            <tr>
+                <td class="p-2 flex items-center space-x-2">
+                    <img src="${p.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="w-10 h-10 rounded object-cover border border-amber-400">
+                    <div><strong>${p.name}</strong><br><span class="text-[10px] text-slate-400">${p.rawPhone || p.phone}</span></div>
+                </td>
+                <td class="p-2">${p.pkgName}</td>
+                <td class="p-2 text-amber-300 font-mono text-[11px]">${p.location}</td>
+                <td class="p-2 font-bold ${p.status==='Approved'?'text-emerald-400':(p.status==='Rejected'?'text-red-400':'text-amber-400')}">${p.status}</td>
+                <td class="p-2 text-right space-x-1">
+                    <button onclick="updateAppStatus(${i}, 'Approved')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded font-bold">Success</button>
+                    <button onclick="updateAppStatus(${i}, 'Rejected')" class="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold">Reject</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="5" class="p-3 text-center">আবেদন নেই</td></tr>';
+    } else if (tab === 'codeReplies') {
+        document.getElementById('adminSecCodeReplies').classList.remove('hidden');
+        let keys = Object.keys(chatThreads);
+        let listContainer = document.getElementById('adminNameByNameReplyList');
+        listContainer.innerHTML = keys.map(phone => {
+            let thread = chatThreads[phone];
+            let lastMsg = thread.messages[thread.messages.length - 1];
+            return `
+                <div class="bg-slate-950 border border-amber-500/40 p-4 rounded-xl space-y-2 shadow">
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <div>
+                            <strong class="text-amber-400 text-sm"><i class="fa-solid fa-user-circle mr-1"></i> ${thread.clientName}</strong>
+                            <span class="text-[11px] text-slate-400 block font-mono">নম্বর: ${phone}</span>
+                        </div>
+                        <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">অনলাইন</span>
+                    </div>
+                    <div class="bg-slate-900 p-2 rounded text-slate-300 text-xs max-h-20 overflow-y-auto">
+                        <strong>সর্বশেষ মেসেজ:</strong> ${lastMsg ? lastMsg.text : 'মেসেজ নেই'}
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <input type="text" id="directReplyInput_${phone}" placeholder="${thread.clientName}-কে কোড বা মেসেজ লিখুন..." class="flex-grow bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white text-xs">
+                        <button onclick="sendNamedAdminReply('${phone}', '${thread.clientName}')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-1.5 rounded text-xs whitespace-nowrap">
+                            <i class="fa-solid fa-paper-plane mr-1"></i> ${thread.clientName}-কে পাঠান
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('') || '<p class="text-slate-500">কোনো ক্লায়েন্টের কোড আবেদন মেসেজ নেই।</p>';
+    } else if (tab === 'passRequests') {
+        document.getElementById('adminSecPassRequests').classList.remove('hidden');
+        document.getElementById('adminPassRequestsTable').innerHTML = passwordResetRequests.map((r, i) => `
+            <tr>
+                <td class="p-2"><strong>${r.name}</strong><br><span class="text-amber-400 font-mono">${r.phone}</span></td>
+                <td class="p-2 text-slate-300">পুরোনো পাসওয়ার্ড: <span class="text-white font-mono">${r.currentPass}</span></td>
+                <td class="p-2">
+                    <input type="text" id="adminNewPassField_${i}" placeholder="নতুন পাসওয়ার্ড দিন" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs">
+                </td>
+                <td class="p-2 text-right">
+                    <button onclick="adminResolvePasswordRequest(${i}, '${r.phone}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded font-bold">পাসওয়ার্ড পরিবর্তন করুন</button>
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="4" class="p-3 text-center text-slate-500">কোনো পাসওয়ার্ড পরিবর্তনের আবেদন নেই।</td></tr>';
+    } else if (tab === 'deposits') {
+        document.getElementById('adminSecDeposits').classList.remove('hidden');
+        document.getElementById('adminDepositTable').innerHTML = depositRequests.map((d, i) => `
+            <tr>
+                <td class="p-2">${d.method}</td>
+                <td class="p-2">${d.sender}</td>
+                <td class="p-2">${d.trx}</td>
+                <td class="p-2">৳${d.amount}</td>
+                <td class="p-2 font-bold ${d.status==='Approved'?'text-emerald-400':(d.status==='Rejected'?'text-red-400':'text-amber-400')}">${d.status}</td>
+                <td class="p-2 text-right space-x-1">
+                    <button onclick="updateDepositStatus(${i}, 'Approved')" class="bg-emerald-600 text-white px-2 py-1 rounded">Success</button>
+                    <button onclick="updateDepositStatus(${i}, 'Rejected')" class="bg-red-600 text-white px-2 py-1 rounded">Reject</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="6" class="p-3 text-center">নেই</td></tr>';
+    } else if (tab === 'withdraws') {
+        document.getElementById('adminSecWithdraws').classList.remove('hidden');
+        document.getElementById('adminWithdrawTable').innerHTML = withdrawRequests.map((w, i) => `
+            <tr>
+                <td class="p-2">${w.bank}</td>
+                <td class="p-2">${w.acc}<br><span class="text-[10px] text-emerald-400 font-bold">${w.holder}</span></td>
+                <td class="p-2">৳${w.amount}</td>
+                <td class="p-2 font-bold ${w.status==='Success'?'text-emerald-400':(w.status==='Rejected'?'text-red-400':'text-amber-400')}">${w.status}</td>
+                <td class="p-2 text-right space-x-1">
+                    <button onclick="updateWithdrawStatus(${i}, 'Success')" class="bg-emerald-600 text-white px-2 py-1 rounded">Success</button>
+                    <button onclick="updateWithdrawStatus(${i}, 'Rejected')" class="bg-red-600 text-white px-2 py-1 rounded">Reject</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="5" class="p-3 text-center">নেই</td></tr>';
+    } else if (tab === 'liveChats') {
+        document.getElementById('adminSecLiveChats').classList.remove('hidden');
+        let sel = document.getElementById('adminChatClientSelector');
+        let keys = Object.keys(chatThreads);
+        sel.innerHTML = keys.map(phone => `<option value="${phone}">${chatThreads[phone].clientName} (${phone})</option>`).join('');
+        renderAdminSelectedClientChat();
+    } else if (tab === 'genCodes') {
+        document.getElementById('adminSecGenCodes').classList.remove('hidden');
+    }
+}
+
+function sendNamedAdminReply(targetPhone, clientName) {
+    let inp = document.getElementById(`directReplyInput_${targetPhone}`);
+    let text = inp.value.trim();
+    if (!text) { alert('মেসেজ বা কোড লিখুন!'); return; }
+    if (chatThreads[targetPhone]) {
+        chatThreads[targetPhone].messages.push({ sender: 'admin', text: `প্রিয় ${clientName}, ${text}` });
+    }
+    inp.value = '';
+    saveData();
+    switchAdminTab('codeReplies');
+    renderChatMessages();
+    alert(`✅ ${clientName}-এর নামে রিপ্লাই পাঠানো হয়েছে!`);
+}
+
+function adminResolvePasswordRequest(idx, phone) {
+    let newPassInput = document.getElementById(`adminNewPassField_${idx}`);
+    let newPass = newPassInput.value.trim();
+    if (!newPass) { alert('নতুন পাসওয়ার্ড লিখুন!'); return; }
+
+    let targetUser = allRegisteredUsers.find(u => u.phone === phone);
+    if (targetUser) {
+        targetUser.pass = newPass;
+        if (currentUser.phone === phone) currentUser.pass = newPass;
+    }
+    passwordResetRequests.splice(idx, 1);
+    saveData();
+    switchAdminTab('passRequests');
+    alert('✅ ক্লায়েন্টের পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!');
+}
+
+function renderAdminSelectedClientChat() {
+    let phone = document.getElementById('adminChatClientSelector').value;
+    let inbox = document.getElementById('adminLiveChatInbox');
+    if (!phone || !chatThreads[phone]) {
+        inbox.innerHTML = '<p class="text-slate-500">কোনো চ্যাট নেই।</p>';
+        return;
+    }
+    let thread = chatThreads[phone];
+    inbox.innerHTML = `
+        <div class="space-y-2">
+            ${thread.messages.map(m => `<div class="p-2 rounded bg-slate-900"><strong class="${m.sender==='admin'?'text-amber-400':'text-emerald-400'}">${m.sender==='admin'?'অ্যাডমিন':thread.clientName}:</strong> ${m.text}</div>`).join('')}
+        </div>
+        <div class="flex gap-2 pt-2">
+            <input type="text" id="adminReplyText" placeholder="${thread.clientName}-কে রিপ্লাই দিন..." class="flex-grow bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white">
+            <button onclick="sendAdminReply('${phone}')" class="bg-purple-600 text-white px-3 py-1 rounded font-bold">পাঠান</button>
+        </div>
+    `;
+}
+
+function sendAdminReply(targetPhone) {
+    let inp = document.getElementById('adminReplyText');
+    let text = inp.value.trim();
+    if (!text) return;
+    if (chatThreads[targetPhone]) {
+        chatThreads[targetPhone].messages.push({ sender: 'admin', text });
+    }
+    inp.value = '';
+    saveData(); renderAdminSelectedClientChat(); renderChatMessages();
+}
+
+function updateAppStatus(idx, status) {
+    pendingApplications[idx].status = status;
+    saveData(); switchAdminTab('packages');
+    updateClientNotificationBar();
+    showBottomLeftPopup('✅ প্যাকেজ স্ট্যাটাস সফলভাবে আপডেট হয়েছে!');
+}
+
+function updateDepositStatus(idx, status) {
+    let dep = depositRequests[idx];
+    if (dep.status !== 'Approved' && status === 'Approved') {
+        balance += Number(dep.amount);
+        changeCurrency();
+    }
+    dep.status = status;
+    saveData(); switchAdminTab('deposits');
+}
+
+function updateWithdrawStatus(idx, status) {
+    withdrawRequests[idx].status = status;
+    saveData(); switchAdminTab('withdraws');
+}
+
+function searchClientDetails() {
+    let q = document.getElementById('adminSearchQuery').value.trim().toLowerCase();
+    let resBox = document.getElementById('adminClientSearchResult');
+    if (!q) { resBox.classList.add('hidden'); return; }
+
+    let found = allRegisteredUsers.find(u => u.name.toLowerCase().includes(q) || u.phone.includes(q));
+    resBox.classList.remove('hidden');
+    if (found) {
+        resBox.innerHTML = `
+            <strong>ক্লায়েন্ট:</strong> ${found.name} (${found.phone})<br>
+            বর্তমান লগইন পাসওয়ার্ড: <strong class="text-white">${found.pass}</strong> | উইথড্র পিন: <strong class="text-emerald-400">${found.withdrawPin}</strong>
+            <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div class="flex gap-1">
+                    <input type="text" id="adminNewPassInput" placeholder="নতুন লগইন পাসওয়ার্ড" class="flex-grow bg-slate-900 border rounded px-2 py-1 text-white text-xs">
+                    <button onclick="adminResetUserCredentials('${found.phone}', 'pass')" class="bg-amber-500 text-slate-950 font-bold px-2 py-1 rounded text-xs">পাসওয়ার্ড বদলান</button>
+                </div>
+                <div class="flex gap-1">
+                    <input type="text" id="adminNewPinInput" maxlength="4" placeholder="নতুন ৪ সংখ্যার পিন" class="flex-grow bg-slate-900 border rounded px-2 py-1 text-white text-xs">
+                    <button onclick="adminResetUserCredentials('${found.phone}', 'pin')" class="bg-emerald-500 text-slate-950 font-bold px-2 py-1 rounded text-xs">পিন বদলান</button>
+                </div>
+            </div>
+        `;
+    } else {
+        resBox.innerHTML = "❌ এই নামের বা নম্বরের ক্লায়েন্ট পাওয়া যায়নি।";
+    }
+}
+
+function adminResetUserCredentials(phone, type) {
+    let u = allRegisteredUsers.find(usr => usr.phone === phone);
+    if (!u) return;
+    if (type === 'pass') {
+        let newP = document.getElementById('adminNewPassInput').value.trim();
+        if (!newP) { alert('নতুন পাসওয়ার্ড লিখুন!'); return; }
+        u.pass = newP;
+        if (currentUser.phone === phone) currentUser.pass = newP;
+        alert('✅ ক্লায়েন্টের লগইন পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!');
+    } else if (type === 'pin') {
+        let newPin = document.getElementById('adminNewPinInput').value.trim();
+        if (!newPin || newPin.length !== 4) { alert('৪ সংখ্যার পিন দিন!'); return; }
+        u.withdrawPin = newPin;
+        if (currentUser.phone === phone) currentUser.withdrawPin = newPin;
+        alert('✅ ক্লায়েন্টের উইথড্র সিকিউরিটি পিন সফলভাবে পরিবর্তন করা হয়েছে!');
+    }
+    saveData();
+    searchClientDetails();
+}
+
+function generateSingleUseCode() {
+    let tier = document.getElementById('adminGenPkgSelect').value;
+    let prefix = tier === 'starter' ? 'STR' : (tier === 'bronze' ? 'BRZ' : (tier === 'silver' ? 'SLV' : 'GLD'));
+    let code = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+    generatedPackageCodes.push({ code, tier, used: false });
+    saveData();
+    document.getElementById('generatedCodeDisplay').innerText = "কোড: " + code;
+}
+
+function scrollToSection(id) { document.getElementById(id).scrollIntoView({ behavior: 'smooth' }); }
+function toggleTheme() { document.getElementById('htmlRoot').classList.toggle('dark'); }
